@@ -1,7 +1,7 @@
 sf: 4
 model:
   base_learning_rate: 5.0e-05
-  target: ldm.models.diffusion.ddpm.LatentDiffusionSRTextWT
+  target: ldm.models.diffusion.ddpmssl.LatentDiffusionSRTextWTSSL
   params:
     # parameterization: "v"
     linear_start: 0.00085
@@ -19,15 +19,26 @@ model:
     scale_factor: 0.18215
     use_ema: False
     # for training only
-    ckpt_path: /data1_ssd4t/chendu/myprojects/MyStableSR/pretrained_models/v2-1_512-ema-pruned.ckpt
+    ckpt_path: /data1_ssd4t/chendu/myprojects/MyStableSR/pretrained_models/StableSR/v2-1_512-ema-pruned.ckpt
     unfrozen_diff: False
     random_size: False
     time_replace: 1000
-    use_usm: True
+    use_usm: False
     #P2 weighting, we do not use in final version
     p2_gamma: ~
     p2_k: ~
     # ignore_keys: []
+
+    sslopt:
+      mask_stride: 3
+      simself_strategy: 'areaarea_mask_nonlocalavg_cuda_v1'
+      kernel_size: 25
+      scaling_factor: 0.004
+      kernel_size_center: 9
+      softmax_sr: True
+      softmax_gt: True
+      simself_dh: 64
+      simself_dw: 64
 
     unet_config:
       target: ldm.modules.diffusionmodules.openaimodel.UNetModelDualcondV2
@@ -52,7 +63,7 @@ model:
       target: ldm.models.autoencoder.AutoencoderKL
       params:
         # for training only
-        ckpt_path: /data1_ssd4t/chendu/myprojects/MyStableSR/pretrained_models/v2-1_512-ema-pruned.ckpt
+        ckpt_path: /data1_ssd4t/chendu/myprojects/MyStableSR/pretrained_models/StableSR/v2-1_512-ema-pruned.ckpt
         embed_dim: 4
         monitor: val/rec_loss
         ddconfig:
@@ -128,21 +139,24 @@ degradation:
 data:
   target: main.DataModuleFromConfig
   params:
-    batch_size: 6
-    num_workers: 0
+    batch_size: 4
+    num_workers: 2
     wrap: false
     train:
-      target: basicsr.data.realesrgan_dataset.RealESRGANDataset
+      target: basicsr.data.twostagedegradation_img_mask_dataset.TwoStageDegradation_Img_Mask_Dataset
       params:
-        queue_size: 180
-        gt_path: ['/home/chendu/data2_hdd10t/chendu/dataset/DIV8K/trainHR/', '/data1_ssd4t/chendu/datasets/DF2K_OST/HR/']
-        face_gt_path: '/home/chendu/data2_hdd10t/chendu/dataset/ffhq/images1024x1024/'
+        queue_size: 64
+        gt_path: ['/data1_ssd4t/chendu/datasets/DF2K_OST/multiscale_HR_sub_512']
+#        face_gt_path: '/home/chendu/data2_hdd10t/chendu/dataset/ffhq/multiscale_images1024x1024'
+        dataroot_gt_mask: ['/data1_ssd4t/chendu/datasets/DF2K_OST/mask_selfsim/multiscale_HR_sub_512/Laplacian/L/threshold-20.0/mat']
+#        dataroot_face_gt_mask: '/home/chendu/data2_hdd10t/chendu/dataset/ffhq/mask_selfsim/multiscale_images1024x1024/Laplacian/L/threshold-20.0/mat'
         num_face: 10000
         crop_size: 512
         io_backend:
           type: disk
 
-        blur_kernel_size: 21
+        blur_kernel_size_min: 1
+        blur_kernel_size_max: 10
         kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
         kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
         sinc_prob: 0.1
@@ -150,7 +164,8 @@ data:
         betag_range: [0.5, 2.0]
         betap_range: [1, 1.5]
 
-        blur_kernel_size2: 11
+        blur_kernel_size_min2: 1
+        blur_kernel_size_max2: 5
         kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
         kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
         sinc_prob2: 0.1
@@ -163,85 +178,100 @@ data:
         gt_size: 512
         use_hflip: True
         use_rot: False
-    validation:
-      target: basicsr.data.realesrgan_dataset.RealESRGANDataset
-      params:
-        gt_path: /data1_ssd4t/chendu/datasets/DIV2K/DIV2K_train_HR/
-        crop_size: 512
-        io_backend:
-          type: disk
+#    validation:
+#      target: basicsr.data.twostagedegradation_df2k_dataset.TwoStageDegradation_DF2K_Dataset
+#      params:
+#        gt_path: ['/home/chendu/data2_hdd10t/chendu/dataset/basicsr/DIV2K100/GT/GTmod12']
+#        crop_size: 512
+#        io_backend:
+#          type: disk
+#
+#        blur_kernel_size_min: 1
+#        blur_kernel_size_max: 3
+#        kernel_list: ['iso', 'aniso']
+#        kernel_prob: [0.7, 0.3]
+#        sinc_prob: 0.01
+#        blur_sigma: [0.1, 0.6]
+#        betag_range: [0.1, 2.0]
+#        betap_range: [0.1, 1.0]
+#
+#        blur_kernel_size_min2: 1
+#        blur_kernel_size_max2: 2
+#        kernel_list2: ['iso', 'aniso']
+#        kernel_prob2: [0.7, 0.3]
+#        sinc_prob2: 0.01
+#        blur_sigma2: [0.1, 0.4]
+#        betag_range2: [0.1, 2.0]
+#        betap_range2: [0.1, 1.0]
+#
+#        final_sinc_prob: 0.1
+#
+#        gt_size: 512
+#        use_hflip: True
+#        use_rot: False
 
-        blur_kernel_size: 21
-        kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
-        kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-        sinc_prob: 0.1
-        blur_sigma: [0.2, 1.5]
-        betag_range: [0.5, 2.0]
-        betap_range: [1, 1.5]
-
-        blur_kernel_size2: 11
-        kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
-        kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-        sinc_prob2: 0.1
-        blur_sigma2: [0.2, 1.0]
-        betag_range2: [0.5, 2.0]
-        betap_range2: [1, 1.5]
-
-        final_sinc_prob: 0.8
-
-        gt_size: 512
-        use_hflip: True
-        use_rot: False
-
-test_data:
-  target: main.DataModuleFromConfig
-  params:
-    batch_size: 1
-    num_workers: 0
-    wrap: false
-    test:
-      target: basicsr.data.realesrgan_dataset.RealESRGANDataset
-      params:
-        gt_path: /data1_ssd4t/chendu/datasets/DIV2K/DIV2K_train_HR/
-        crop_size: 512
-        io_backend:
-          type: disk
-
-        blur_kernel_size: 21
-        kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
-        kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-        sinc_prob: 0.1
-        blur_sigma: [0.2, 1.5]
-        betag_range: [0.5, 2.0]
-        betap_range: [1, 1.5]
-
-        blur_kernel_size2: 11
-        kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
-        kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-        sinc_prob2: 0.1
-        blur_sigma2: [0.2, 1.0]
-        betag_range2: [0.5, 2.0]
-        betap_range2: [1, 1.5]
-
-        final_sinc_prob: 0.8
-
-        gt_size: 512
-        use_hflip: True
-        use_rot: False
+#test_data:
+#  target: main.DataModuleFromConfig
+#  params:
+#    batch_size: 4
+#    num_workers: 2
+#    wrap: false
+#    test:
+#      target: basicsr.data.twostagedegradation_df2k_dataset.TwoStageDegradation_DF2K_Dataset
+#      params:
+#        gt_path: ['/home/chendu/data2_hdd10t/chendu/dataset/basicsr/DIV2K100/GT/GTmod12']
+#        crop_size: 512
+#        io_backend:
+#          type: disk
+#
+#        blur_kernel_size_min: 1
+#        blur_kernel_size_max: 3
+#        kernel_list: ['iso', 'aniso']
+#        kernel_prob: [0.7, 0.3]
+#        sinc_prob: 0.01
+#        blur_sigma: [0.1, 0.6]
+#        betag_range: [0.1, 2.0]
+#        betap_range: [0.1, 1.0]
+#
+#        blur_kernel_size_min2: 1
+#        blur_kernel_size_max2: 2
+#        kernel_list2: ['iso', 'aniso']
+#        kernel_prob2: [0.7, 0.3]
+#        sinc_prob2: 0.01
+#        blur_sigma2: [0.1, 0.4]
+#        betag_range2: [0.1, 2.0]
+#        betap_range2: [0.1, 1.0]
+#
+#        final_sinc_prob: 0.1
+#
+#        gt_size: 512
+#        use_hflip: True
+#        use_rot: False
 
 lightning:
   modelcheckpoint:
     params:
-      every_n_train_steps: 1500
+      every_n_train_steps: 5000
   callbacks:
     image_logger:
       target: main.ImageLogger
       params:
-        batch_frequency: 1500
+        batch_frequency: 1000000
         max_images: 4
         increase_log_steps: False
 
   trainer:
     benchmark: True
     max_steps: 800000
-    accumulate_grad_batches: 4
+    accumulate_grad_batches: 6
+
+ISSL_loss:
+    selfsim_opt:
+      type: L1Loss
+      loss_weight: !!float 5e2
+      reduction: mean
+    selfsim1_opt:
+      type: KLDistanceLoss
+      loss_weight: !!float 5e2
+      reduction: mean
+      softmax: False

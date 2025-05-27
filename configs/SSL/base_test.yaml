@@ -1,0 +1,346 @@
+# 超分辨率缩放因子，这里设置为 4 倍超分辨率
+sf: 4
+model:
+  # 模型的基础学习率
+  base_learning_rate: 5.0e-05
+  # 模型的目标类，这里指向一个潜在扩散超分辨率文本带结构条件的自监督学习模型
+  target: ldm.models.diffusion.ddpmssl.LatentDiffusionSRTextWTSSL
+  params:
+    # 注释掉的参数化方式，可选择 "v"
+    # parameterization: "v"
+    # 线性噪声调度的起始值
+    linear_start: 0.00085
+    # 线性噪声调度的结束值
+    linear_end: 0.0120
+    # 条件时间步的数量
+    num_timesteps_cond: 1
+    # 日志记录的时间间隔
+    log_every_t: 200
+    # 总的时间步数量
+    timesteps: 1000
+    # 第一阶段模型的输入键，这里为图像
+    first_stage_key: image
+    # 条件阶段模型的输入键，这里为文本描述
+    cond_stage_key: caption
+    # 图像的大小
+    image_size: 512
+    # 通道数量
+    channels: 4
+    # 条件阶段模型是否可训练，这里设置为不可训练
+    cond_stage_trainable: False   # Note: different from the one we trained before
+    # 条件化的方式，这里使用交叉注意力机制
+    conditioning_key: crossattn
+    # 监控的指标，这里为验证集上的简单指数移动平均损失
+    monitor: val/loss_simple_ema
+    # 缩放因子
+    scale_factor: 0.18215
+    # 是否使用指数移动平均模型
+    use_ema: False
+    # 扩散模型的参数是否解冻，这里设置为不解冻
+    unfrozen_diff: False
+    # 是否使用随机大小
+    random_size: False
+    # 时间替换的值
+    time_replace: 1000
+    # 是否使用非锐化掩码（USM），这里设置为不使用
+    use_usm: False
+    # P2 加权相关参数，这里不使用，设置为 None
+    #P2 weighting, we do not use in final version
+    p2_gamma: ~
+    p2_k: ~
+    # 要忽略的键，这里未设置
+    # ignore_keys: []
+
+    sslopt:
+      # 掩码的步长
+      mask_stride: 3
+      # 自相似性策略，这里使用特定的区域区域掩码非局部平均 CUDA 版本 1
+      simself_strategy: 'areaarea_mask_nonlocalavg_cuda_v1'
+      # 卷积核的大小
+      kernel_size: 25
+      # 缩放因子
+      scaling_factor: 0.004
+      # 中心卷积核的大小
+      kernel_size_center: 9
+      # 超分辨率图像是否使用 softmax
+      softmax_sr: True
+      # 真实图像是否使用 softmax
+      softmax_gt: True
+      # 自相似性的高度维度
+      simself_dh: 64
+      # 自相似性的宽度维度
+      simself_dw: 64
+
+    unet_config:
+      # UNet 模型的目标类
+      target: ldm.modules.diffusionmodules.openaimodel.UNetModelDualcondV2
+      params:
+        # 图像大小，这里未使用
+        image_size: 32 # unused
+        # 输入通道数
+        in_channels: 4
+        # 输出通道数
+        out_channels: 4
+        # 模型的通道数
+        model_channels: 320
+        # 注意力机制的分辨率
+        attention_resolutions: [ 4, 2, 1 ]
+        # 残差块的数量
+        num_res_blocks: 2
+        # 通道倍数
+        channel_mult: [ 1, 2, 4, 4 ]
+        # 每个头的通道数
+        num_head_channels: 64
+        # 是否使用空间变换器
+        use_spatial_transformer: True
+        # 是否在变换器中使用线性层
+        use_linear_in_transformer: True
+        # 变换器的深度
+        transformer_depth: 1
+        # 上下文维度
+        context_dim: 1024
+        # 是否使用检查点机制
+        use_checkpoint: False
+        # 是否使用旧版本的设置
+        legacy: False
+        # 结构嵌入的通道数
+        semb_channels: 256
+
+    first_stage_config:
+      # 第一阶段模型的目标类，这里是一个自动编码器
+      target: ldm.models.autoencoder.AutoencoderKL
+      params:
+        # 用于训练的检查点路径，这里需要替换为实际的 VAE 模型路径
+        # for training only
+        ckpt_path: xxx # path to VAE model of stablesr
+        # 嵌入的维度
+        embed_dim: 4
+        # 监控的指标，这里为验证集上的重建损失
+        monitor: val/rec_loss
+        ddconfig:
+          # 是否使用双 z 向量
+          double_z: true
+          # z 向量的通道数
+          z_channels: 4
+          # 分辨率
+          resolution: 512
+          # 输入通道数
+          in_channels: 3
+          # 输出通道数
+          out_ch: 3
+          # 基础通道数
+          ch: 128
+          # 通道倍数
+          ch_mult:
+          - 1
+          - 2
+          - 4
+          - 4
+          # 残差块的数量
+          num_res_blocks: 2
+          # 注意力机制的分辨率
+          attn_resolutions: []
+          # 丢弃率
+          dropout: 0.0
+        lossconfig:
+          # 损失函数的目标类，这里使用恒等函数
+          target: torch.nn.Identity
+
+    cond_stage_config:
+      # 条件阶段模型的目标类，这里是一个冻结的 OpenCLIP 嵌入器
+      target: ldm.modules.encoders.modules.FrozenOpenCLIPEmbedder
+      params:
+        # 是否冻结模型参数
+        freeze: True
+        # 使用的层，这里为倒数第二层
+        layer: "penultimate"
+
+    structcond_stage_config:
+      # 结构条件阶段模型的目标类
+      target: ldm.modules.diffusionmodules.openaimodel.EncoderUNetModelWT
+      params:
+        # 图像大小
+        image_size: 96
+        # 输入通道数
+        in_channels: 4
+        # 模型的通道数
+        model_channels: 256
+        # 输出通道数
+        out_channels: 256
+        # 残差块的数量
+        num_res_blocks: 2
+        # 注意力机制的分辨率
+        attention_resolutions: [ 4, 2, 1 ]
+        # 丢弃率
+        dropout: 0
+        # 通道倍数
+        channel_mult: [ 1, 1, 2, 2 ]
+        # 是否使用卷积重采样
+        conv_resample: True
+        # 维度数
+        dims: 2
+        # 是否使用检查点机制
+        use_checkpoint: False
+        # 是否使用半精度浮点数
+        use_fp16: False
+        # 头的数量
+        num_heads: 4
+        # 每个头的通道数
+        num_head_channels: -1
+        # 上采样时头的数量
+        num_heads_upsample: -1
+        # 是否使用缩放平移归一化
+        use_scale_shift_norm: False
+        # 残差块是否用于上采样或下采样
+        resblock_updown: False
+        # 是否使用新的注意力顺序
+        use_new_attention_order: False
+
+
+degradation:
+  # 第一个退化过程
+  # 图像缩放的概率，分别为上采样、下采样、保持不变
+  resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+  # 图像缩放的范围
+  resize_range: [0.3, 1.5]
+  # 添加高斯噪声的概率
+  gaussian_noise_prob: 0.5
+  # 高斯噪声的范围
+  noise_range: [1, 15]
+  # 泊松噪声的缩放范围
+  poisson_scale_range: [0.05, 2.0]
+  # 添加灰度噪声的概率
+  gray_noise_prob: 0.4
+  # JPEG 压缩的范围
+  jpeg_range: [60, 95]
+
+  # 第二个退化过程
+  # 进行第二次模糊的概率
+  second_blur_prob: 0.5
+  # 第二次图像缩放的概率，分别为上采样、下采样、保持不变
+  resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+  # 第二次图像缩放的范围
+  resize_range2: [0.6, 1.2]
+  # 第二次添加高斯噪声的概率
+  gaussian_noise_prob2: 0.5
+  # 第二次高斯噪声的范围
+  noise_range2: [1, 12]
+  # 第二次泊松噪声的缩放范围
+  poisson_scale_range2: [0.05, 1.0]
+  # 第二次添加灰度噪声的概率
+  gray_noise_prob2: 0.4
+  # 第二次 JPEG 压缩的范围
+  jpeg_range2: [60, 100]
+
+  # 真实图像的大小
+  gt_size: 512
+  # 不进行退化的概率
+  no_degradation_prob: 0.01
+
+data:
+  # 数据模块的目标类
+  target: main.DataModuleFromConfig
+  params:
+    # 批量大小
+    batch_size: 2
+    # 数据加载的工作线程数
+    num_workers: 2
+    # 是否包装数据
+    wrap: false
+    train:
+      # 训练数据集的目标类
+      target: basicsr.data.twostagedegradation_img_mask_dataset.TwoStageDegradation_Img_Mask_Dataset
+      params:
+        # 数据队列的大小
+        queue_size: 64
+        # 真实图像的路径
+        gt_path: ['/home/notebook/code/personal/S9049747/LowLevelLLM/DataSets/SSL_dataset/df2k_ost']
+        # 真实图像掩码的路径
+        dataroot_gt_mask: ['/home/notebook/code/personal/S9049747/LowLevelLLM/DataSets/SSL_dataset/df2k_ost_mask']
+        # 人脸真实图像的路径
+        face_gt_path: '/home/notebook/code/personal/S9049747/LowLevelLLM/DataSets/SSL_dataset/ffhq10000'
+        # 人脸真实图像掩码的路径
+        dataroot_face_gt_mask: '/home/notebook/code/personal/S9049747/LowLevelLLM/DataSets/SSL_dataset/ffhq10000_mask/ffhq10000/Laplacian/L/threshold-20.0/mat'
+        # 人脸图像的数量
+        num_face: 10000
+        # 裁剪的大小
+        crop_size: 512
+        io_backend:
+          # 输入输出后端的类型，这里使用磁盘
+          type: disk
+
+        # 第一次模糊卷积核的最小大小
+        blur_kernel_size_min: 1
+        # 第一次模糊卷积核的最大大小
+        blur_kernel_size_max: 10
+        # 第一次模糊的核类型列表
+        kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+        # 第一次模糊核类型的概率
+        kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+        # 第一次 sinc 卷积的概率
+        sinc_prob: 0.1
+        # 第一次模糊的标准差范围
+        blur_sigma: [0.2, 1.5]
+        # 第一次各向异性模糊的参数范围
+        betag_range: [0.5, 2.0]
+        # 第一次各向异性模糊的参数范围
+        betap_range: [1, 1.5]
+
+        # 第二次模糊卷积核的最小大小
+        blur_kernel_size_min2: 1
+        # 第二次模糊卷积核的最大大小
+        blur_kernel_size_max2: 5
+        # 第二次模糊的核类型列表
+        kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+        # 第二次模糊核类型的概率
+        kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+        # 第二次 sinc 卷积的概率
+        sinc_prob2: 0.1
+        # 第二次模糊的标准差范围
+        blur_sigma2: [0.2, 1.0]
+        # 第二次各向异性模糊的参数范围
+        betag_range2: [0.5, 2.0]
+        # 第二次各向异性模糊的参数范围
+        betap_range2: [1, 1.5]
+
+        # 最终 sinc 卷积的概率
+        final_sinc_prob: 0.8
+
+        # 真实图像的大小
+        gt_size: 512
+        # 是否使用水平翻转
+        use_hflip: True
+        # 是否使用旋转
+        use_rot: False
+
+lightning:
+  modelcheckpoint:
+    params:
+      # 每多少个训练步骤保存一次模型检查点
+      every_n_train_steps: 1000
+
+  trainer:
+    # 是否使用基准模式，可提高训练速度
+    benchmark: True
+    # 最大训练步骤数
+    max_steps: 800000
+    # 梯度累积的批次数量
+    accumulate_grad_batches: 12
+
+ISSL_loss:
+    selfsim_opt:
+      # 自相似性损失的类型，这里使用 L1 损失
+      type: L1Loss
+      # 自相似性损失的权重
+      loss_weight: !!float 0.5
+      # 损失的缩减方式，这里使用均值
+      reduction: mean
+    selfsim1_opt:
+      # 自相似性 1 损失的类型，这里使用 KL 散度损失
+      type: KLDistanceLoss
+      # 自相似性 1 损失的权重
+      loss_weight: !!float 0.5
+      # 损失的缩减方式，这里使用均值
+      reduction: mean
+      # 是否使用 softmax
+      softmax: False

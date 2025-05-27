@@ -151,6 +151,8 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
         super().__init__()
         assert layer in self.LAYERS
         model, _, _ = open_clip.create_model_and_transforms(arch, device=torch.device('cpu'), pretrained=version)
+        # model, _, _ = open_clip.create_model_and_transforms(arch, device=torch.device('cpu'), pretrained=version, cache_dir='/home/notebook/code/personal/S9049747/projects/BasicSR_experiments/models/stablesr')
+        # model, _, _ = open_clip.create_model_and_transforms(arch, device=torch.device('cpu'), pretrained='/home/notebook/code/personal/S9049747/projects/BasicSR_experiments/models/stablesr/open_clip_pytorch_model.bin')
         del model.visual
         self.model = model
 

@@ -278,14 +278,23 @@ class SetupCallback(Callback):
 
         else:
             # ModelCheckpoint callback created log directory --- remove it
-            if not self.resume and os.path.exists(self.logdir):
-                dst, name = os.path.split(self.logdir)
-                dst = os.path.join(dst, "child_runs", name)
-                os.makedirs(os.path.split(dst)[0], exist_ok=True)
-                try:
-                    os.rename(self.logdir, dst)
-                except FileNotFoundError:
-                    pass
+            pass
+#             if not self.resume and os.path.exists(self.logdir):
+#                 dst, name = os.path.split(self.logdir)
+#                 new_logdir = os.path.join(dst, "child_runs", name)
+# 
+#                 # ----- backup the logdir under child_runs -----
+#                 if len(os.listdir(dst)) > 0:
+#                     now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+#                     backup_logdir = os.path.join(dst, 'child_runs', f'{name}_backup_at_{now}')    
+#                     shutil.move(new_logdir, backup_logdir)
+#                 # ----- ends -----
+# 
+#                 os.makedirs(os.path.split(new_logdir)[0], exist_ok=True)
+#                 try:
+#                     os.rename(self.logdir, new_logdir)
+#                 except FileNotFoundError:
+#                     pass
 
 
 class ImageLogger(Callback):
@@ -465,7 +474,7 @@ if __name__ == "__main__":
     # add cwd for convenience and to make classes in this file available when
     # running as `python main.py`
     # (in particular `main.DataModuleFromConfig`)
-    sys.path.append(os.getcwd())
+    # sys.path.append(os.getcwd())
 
     parser = get_parser()
     parser = Trainer.add_argparse_args(parser)
@@ -509,16 +518,12 @@ if __name__ == "__main__":
         _tmp = logdir.split("/")
         nowname = _tmp[-1]
     else:
-        if opt.name:
-            name = "_" + opt.name
-        elif opt.base:
-            cfg_fname = os.path.split(opt.base[0])[-1]
-            cfg_name = os.path.splitext(cfg_fname)[0]
-            name = "_" + cfg_name
-        else:
-            name = ""
-        nowname = now + name + opt.postfix
-        logdir = os.path.join(opt.logdir, nowname)
+        assert len(opt.name) > 0, f'please provide a valid name for this experiment, but get opt.name "{opt.name}"'
+        logdir = os.path.join(opt.logdir, opt.name)
+        if os.path.exists(logdir):
+            backup_logdir = os.path.join(opt.logdir, f'{opt.name}_backup_at_{now}')    
+        os.makedirs(logdir, exist_ok=True)
+        nowname = opt.name
 
     ckptdir = os.path.join(logdir, "checkpoints")
     cfgdir = os.path.join(logdir, "configs")
@@ -551,6 +556,11 @@ if __name__ == "__main__":
 
     model.configs = config
 
+    if config.model.params.get('sslopt', None):
+        if opt.train:
+            model.init_issl_settings()
+
+
     # trainer and callbacks
     trainer_kwargs = dict()
 
@@ -574,8 +584,9 @@ if __name__ == "__main__":
         },
     }
     # We use wandb by default. Change to testtube if you do not want to use wandb
-    default_logger_cfg = default_logger_cfgs["wandb"]
-    os.makedirs(os.path.join(logdir, 'wandb'), exist_ok=True)
+    # default_logger_cfg = default_logger_cfgs["wandb"]
+    default_logger_cfg = default_logger_cfgs["testtube"]
+    # os.makedirs(os.path.join(logdir, 'wandb'), exist_ok=True)
     if "logger" in lightning_config:
         logger_cfg = lightning_config.logger
     else:
@@ -620,14 +631,6 @@ if __name__ == "__main__":
                 "cfgdir": cfgdir,
                 "config": config,
                 "lightning_config": lightning_config,
-            }
-        },
-        "image_logger": {
-            "target": "main.ImageLogger",
-            "params": {
-                "batch_frequency": 750,
-                "max_images": 4,
-                "clamp": True
             }
         },
         "learning_rate_logger": {

@@ -161,33 +161,33 @@ def uniform_on_device(r1, r2, shape, device):
 class DDPM(pl.LightningModule):
     # classic DDPM with Gaussian diffusion, in image space
     def __init__(self,
-                 unet_config,#
-                 timesteps=1000,#
-                 beta_schedule="linear",#β调度类型，默认"linear"
-                 loss_type="l2",#
-                 ckpt_path=None,#
-                 ignore_keys=[],#加载检查点时要忽略的键
-                 load_only_unet=False,#只加载U-Net模型
-                 monitor="val/loss",#监控指标
-                 use_ema=True,#使用EMA
-                 first_stage_key="image",#第一阶段模型的键
-                 image_size=256,#图像大小
-                 channels=3,#通道数
-                 log_every_t=100,#日志记录频率
-                 clip_denoised=True,#是否剪裁去噪后的图像
-                 linear_start=1e-4,#
-                 linear_end=2e-2,#
-                 cosine_s=8e-3,#余弦调度参数
-                 given_betas=None,#给定的β值
-                 original_elbo_weight=0.,#原始ELBO权重
+                 unet_config,
+                 timesteps=1000,
+                 beta_schedule="linear",
+                 loss_type="l2",
+                 ckpt_path=None,
+                 ignore_keys=[],
+                 load_only_unet=False,
+                 monitor="val/loss",
+                 use_ema=True,
+                 first_stage_key="image",
+                 image_size=256,
+                 channels=3,
+                 log_every_t=100,
+                 clip_denoised=True,
+                 linear_start=1e-4,
+                 linear_end=2e-2,
+                 cosine_s=8e-3,
+                 given_betas=None,
+                 original_elbo_weight=0.,
                  v_posterior=0.,  # weight for choosing posterior variance as sigma = (1-v) * beta_tilde + v * beta
-                 l_simple_weight=1.,#简单损失项的权重，默认1
-                 conditioning_key=None,#条件键
+                 l_simple_weight=1.,
+                 conditioning_key=None,
                  parameterization="eps",  # all assuming fixed variance schedules
-                 scheduler_config=None,#调度配置
-                 use_positional_encodings=False,#是否使用位置编码
-                 learn_logvar=False, #是否学习对数方差
-                 logvar_init=0.,#对数方差的初始值
+                 scheduler_config=None,
+                 use_positional_encodings=False,
+                 learn_logvar=False,
+                 logvar_init=0.,
                  ):
         super().__init__()
         assert parameterization in ["eps", "x0", "v"], 'currently only supporting "eps" and "x0" and "v"'
@@ -220,7 +220,7 @@ class DDPM(pl.LightningModule):
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys, only_model=load_only_unet)
 
-        self.registers_chedule(given_betas=given_betas, beta_schedule=beta_schedule, timesteps=timesteps,
+        self.register_schedule(given_betas=given_betas, beta_schedule=beta_schedule, timesteps=timesteps,
                                linear_start=linear_start, linear_end=linear_end, cosine_s=cosine_s)
 
         self.loss_type = loss_type
@@ -239,8 +239,8 @@ class DDPM(pl.LightningModule):
             betas = make_beta_schedule(beta_schedule, timesteps, linear_start=linear_start, linear_end=linear_end,
                                        cosine_s=cosine_s)
         alphas = 1. - betas
-        alphas_cumprod = np.cumprod(alphas, axis=0)  # 阿尔法的累积乘积，代表在时间步t时信号的总体保留率
-        alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1]) # 阿尔法向后推进一步的值，并将第一个元素设置为1
+        alphas_cumprod = np.cumprod(alphas, axis=0)
+        alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
 
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
@@ -248,9 +248,9 @@ class DDPM(pl.LightningModule):
         self.linear_end = linear_end
         assert alphas_cumprod.shape[0] == self.num_timesteps, 'alphas have to be defined for each timestep'
 
-        to_torch = partial(torch.tensor, dtype=torch.float32)  # 辅助函数将Numpy数组转换为Pytorch的浮点型张量
+        to_torch = partial(torch.tensor, dtype=torch.float32)
 
-        self.register_buffer('betas', to_torch(betas)) # 张量注册为模型状态的一部分。缓冲区是那些应该随模型一起保存（像参数一样），但在训练过程中不会被优化器更新的张量。
+        self.register_buffer('betas', to_torch(betas))
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
         self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
 
@@ -273,12 +273,12 @@ class DDPM(pl.LightningModule):
         self.register_buffer('posterior_mean_coef2', to_torch(
             (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)))
 
-        if self.parameterization == "eps":   # 模型被设计为在每个去噪步骤中预测添加到图像中的噪声
+        if self.parameterization == "eps":
             lvlb_weights = self.betas ** 2 / (
                         2 * self.posterior_variance * to_torch(alphas) * (1 - self.alphas_cumprod))
-        elif self.parameterization == "x0":  # 模型被设计为在每个去噪步骤中预测图像的初始状态
+        elif self.parameterization == "x0":
             lvlb_weights = 0.5 * np.sqrt(torch.Tensor(alphas_cumprod)) / (2. * 1 - torch.Tensor(alphas_cumprod))
-        elif self.parameterization == "v":  # 模型被设计为在每个去噪步骤中预测图像的噪声
+        elif self.parameterization == "v":
             lvlb_weights = torch.ones_like(self.betas ** 2 / (
                     2 * self.posterior_variance * to_torch(alphas) * (1 - self.alphas_cumprod)))
         else:
@@ -615,14 +615,8 @@ class LatentDiffusion(DDPM):
         #     param.requires_grad = False
 
     def make_cond_schedule(self, ):
-        # 创建一个张量 self.cond_ids，长度为当前模型总时间步数 (self.num_timesteps)
-        # 初始时，所有元素都填充为 self.num_timesteps - 1 (即最后一个时间步的索引)
         self.cond_ids = torch.full(size=(self.num_timesteps,), fill_value=self.num_timesteps - 1, dtype=torch.long)
-        # 生成一个从0到 self.num_timesteps - 1 的等差序列，序列长度为 self.num_timesteps_cond (构造函数中定义的条件应用步数)
-        # 然后四舍五入到最近的整数，并转换为长整型
         ids = torch.round(torch.linspace(0, self.num_timesteps - 1, self.num_timesteps_cond)).long()
-        # 将 self.cond_ids 的前 self.num_timesteps_cond 个元素替换为上面生成的 ids
-        # 这意味着条件将在这些选定的早期时间步被激活或更新
         self.cond_ids[:self.num_timesteps_cond] = ids
 
     @rank_zero_only
@@ -1045,15 +1039,15 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
         return self.p_losses(x, c, t, *args, **kwargs)
 
-    def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
-        def rescale_bbox(bbox):
-            x0 = clamp((bbox[0] - crop_coordinates[0]) / crop_coordinates[2])
-            y0 = clamp((bbox[1] - crop_coordinates[1]) / crop_coordinates[3])
-            w = min(bbox[2] / crop_coordinates[2], 1 - x0)
-            h = min(bbox[3] / crop_coordinates[3], 1 - y0)
-            return x0, y0, w, h
-
-        return [rescale_bbox(b) for b in bboxes]
+    # def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
+    #     def rescale_bbox(bbox):
+    #         x0 = clamp((bbox[0] - crop_coordinates[0]) / crop_coordinates[2])
+    #         y0 = clamp((bbox[1] - crop_coordinates[1]) / crop_coordinates[3])
+    #         w = min(bbox[2] / crop_coordinates[2], 1 - x0)
+    #         h = min(bbox[3] / crop_coordinates[3], 1 - y0)
+    #         return x0, y0, w, h
+    #
+    #     return [rescale_bbox(b) for b in bboxes]
 
     def apply_model(self, x_noisy, t, cond, return_ids=False):
 
@@ -1569,116 +1563,76 @@ class LatentDiffusion(DDPM):
 class LatentDiffusionSRTextWT(DDPM):
     """main class"""
     def __init__(self,
-                 first_stage_config,         # 第一阶段模型（通常是VAE）的配置
-                 cond_stage_config,          # 条件阶段模型（例如文本编码器）的配置
-                 structcond_stage_config,    # 结构条件阶段模型的配置 (新增的)
-                 num_timesteps_cond=None,    # 条件应用的时间步数
-                 cond_stage_key="image",     # 条件数据在批次中的键名
-                 cond_stage_trainable=False, # 条件阶段模型是否可训练
-                 concat_mode=True,           # 条件连接模式是否为拼接(concat)
-                 cond_stage_forward=None,    # 条件阶段模型特定的前向传播方法名
-                 conditioning_key=None,      # U-Net的条件注入方式 ('concat', 'crossattn')
-                 scale_factor=1.0,           # 潜空间的缩放因子
-                 scale_by_std=False,         # 是否通过潜变量的标准差来缩放
-                 unfrozen_diff=False,        # 是否解冻（训练）U-Net扩散模型的参数 (新增的)
-                 random_size=False,          # 是否在训练时使用随机裁剪的图像尺寸 (新增的)
-                 test_gt=False,              # 在测试/推理时是否使用真实GT作为结构条件 (新增的)
-                 p2_gamma=None,              # P2加权方案的gamma参数 (新增的)
-                 p2_k=None,                  # P2加权方案的k参数 (新增的)
-                 time_replace=None,          # 训练时时间步重采样/替换的步数 (新增的)
-                 use_usm=False,              # 是否在预处理GT时使用USM锐化 (新增的)
-                 mix_ratio=0.0,              # 噪声混合比例，用于训练时增强 (新增的)
-                 *args, **kwargs):           # 其他从父类DDPM或外部传入的参数
+                 first_stage_config,
+                 cond_stage_config,
+                 structcond_stage_config,
+                 num_timesteps_cond=None,
+                 cond_stage_key="image",
+                 cond_stage_trainable=False,
+                 concat_mode=True,
+                 cond_stage_forward=None,
+                 conditioning_key=None,
+                 scale_factor=1.0,
+                 scale_by_std=False,
+                 unfrozen_diff=False,
+                 random_size=False,
+                 test_gt=False,
+                 p2_gamma=None,
+                 p2_k=None,
+                 time_replace=None,
+                 use_usm=False,
+                 mix_ratio=0.0,
+                 *args, **kwargs):
         # put this in your init
-        # 将实例属性 num_timesteps_cond 设置为传入的 num_timesteps_cond，如果未提供则默认为1
         self.num_timesteps_cond = default(num_timesteps_cond, 1)
-        # 是否根据潜编码的标准差来调整缩放因子
         self.scale_by_std = scale_by_std
-        # 是否解冻并训练U-Net扩散模型的主干网络
         self.unfrozen_diff = unfrozen_diff
-        # 是否在训练时使用随机大小的裁剪块
         self.random_size = random_size
-        # 在测试时，结构条件是否直接使用真实的高清图 (Ground Truth)
         self.test_gt = test_gt
-        # 时间步替换参数，用于可能的训练时时间步重采样策略
         self.time_replace = time_replace
-        # 是否在数据预处理时对GT图像使用USM锐化
         self.use_usm = use_usm
-        # 训练时混合不同噪声的比例，可能是一种数据增强手段
         self.mix_ratio = mix_ratio
-        # 断言条件应用的时间步数不能超过总的扩散时间步数(从kwargs中获取timesteps)
         assert self.num_timesteps_cond <= kwargs['timesteps']
         # for backwards compatibility after implementation of DiffusionWrapper
-        # 为了向后兼容DiffusionWrapper的实现，如果未指定conditioning_key
         if conditioning_key is None:
-            # 如果concat_mode为True，则设为'concat'，否则设为'crossattn'
             conditioning_key = 'concat' if concat_mode else 'crossattn'
-        # 如果条件阶段配置指定为'__is_unconditional__'，则不使用条件，conditioning_key设为None
         if cond_stage_config == '__is_unconditional__':
             conditioning_key = None
-        # 从kwargs中弹出ckpt_path参数，如果没有则为None
         ckpt_path = kwargs.pop("ckpt_path", None)
-        # 从kwargs中弹出ignore_keys参数，如果没有则为空列表
         ignore_keys = kwargs.pop("ignore_keys", [])
-        # 调用父类DDPM的__init__方法，传递必要的参数
         super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
-        # 条件是否通过拼接(concatenation)方式注入U-Net
         self.concat_mode = concat_mode
-        # 条件阶段模型是否参与训练
         self.cond_stage_trainable = cond_stage_trainable
-        # 输入批次中，用于条件阶段的数据的键名
         self.cond_stage_key = cond_stage_key
         try:
-            # 尝试从第一阶段模型的配置中获取下采样次数
             self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
         except:
-            # 如果获取失败，默认为0
             self.num_downs = 0
-        # 如果不按标准差缩放
         if not scale_by_std:
-            # 直接使用传入的scale_factor
             self.scale_factor = scale_factor
         else:
-            # 否则，将scale_factor注册为PyTorch的buffer（可保存但通常不参与梯度更新的张量）
             self.register_buffer('scale_factor', torch.tensor(scale_factor))
-        # 实例化第一阶段模型（通常是 VAE）
         self.instantiate_first_stage(first_stage_config)
-        # 实例化条件阶段模型（例如文本编码器）
         self.instantiate_cond_stage(cond_stage_config)
-        # 实例化结构条件阶段模型 (这个是LatentDiffusionSRTextWT特有的)
         self.instantiate_structcond_stage(structcond_stage_config)
-        # 条件阶段模型特定的前向传播方法名（如果提供）
         self.cond_stage_forward = cond_stage_forward
-        # 在这个子类中，通常不裁剪去噪输出到[-1,1] (父类中可能是True)
         self.clip_denoised = False
-        # Bounding Box Tokenizer，用于处理边界框类型的条件，初始为None
         self.bbox_tokenizer = None
 
-        # 标记是否从检查点重启了模型
         self.restarted_from_ckpt = False
-        # 如果提供了检查点路径
         if ckpt_path is not None:
-            # 从检查点加载权重
             self.init_from_ckpt(ckpt_path, ignore_keys)
-            # 标记已从检查点重启
             self.restarted_from_ckpt = True
 
-        # 如果 self.unfrozen_diff 为 False (即U-Net扩散模型被冻结)
         if not self.unfrozen_diff:
-            # 将U-Net模型设置到评估模式 (不更新BN层等)
             self.model.eval()
-            # self.model.train = disabled_train # 这行被注释掉了，原意可能是禁用模型的train()方法
-            # 遍历U-Net模型的所有命名参数
+            # self.model.train = disabled_train
             for name, param in self.model.named_parameters():
-                # 如果参数名中不包含 'spade' (SPADE是一种条件归一化层)
                 if 'spade' not in name:
-                    # 则冻结该参数，不计算梯度
                     param.requires_grad = False
                 else:
-                    # 否则，如果参数名包含 'spade'，则该参数可训练
                     param.requires_grad = True
 
-        # 打印U-Net模型中可训练参数的名称
         print('>>>>>>>>>>>>>>>>model>>>>>>>>>>>>>>>>>>>>')
         param_list = []
         for name, params in self.model.named_parameters():
@@ -1686,14 +1640,12 @@ class LatentDiffusionSRTextWT(DDPM):
                 param_list.append(name)
         print(param_list)
         param_list = []
-        # 打印条件阶段模型中可训练参数的名称
         print('>>>>>>>>>>>>>>>>>cond_stage_model>>>>>>>>>>>>>>>>>>>')
         for name, params in self.cond_stage_model.named_parameters():
             if params.requires_grad:
                 param_list.append(name)
         print(param_list)
         param_list = []
-        # 打印结构条件阶段模型中可训练参数的名称
         print('>>>>>>>>>>>>>>>>structcond_stage_model>>>>>>>>>>>>>>>>>>>>')
         for name, params in self.structcond_stage_model.named_parameters():
             if params.requires_grad:
@@ -1701,57 +1653,34 @@ class LatentDiffusionSRTextWT(DDPM):
         print(param_list)
 
         # P2 weighting: https://github.com/jychoi118/P2-weighting
-        # 如果提供了P2加权的gamma参数
         if p2_gamma is not None:
-            # 必须同时提供k参数
             assert p2_k is not None
             self.p2_gamma = p2_gamma
             self.p2_k = p2_k
-            # 计算信噪比 (Signal-to-Noise Ratio)，用于P2加权
             self.snr = 1.0 / (1 - self.alphas_cumprod) - 1
         else:
-            # 如果不使用P2加权，信噪比为None
             self.snr = None
 
         # Support time respacing during training
-        # 支持训练时的时间步重采样
-        # 如果未提供 time_replace 参数
         if self.time_replace is None:
-            # 则将其设置为总的扩散时间步数 (从kwargs获取)
             self.time_replace = kwargs['timesteps']
-        # 使用 space_timesteps 函数根据总时间步数和 time_replace (希望保留的步数) 生成一组要使用的时间步索引
         use_timesteps = set(space_timesteps(kwargs['timesteps'], [self.time_replace]))
-        last_alpha_cumprod = 1.0 # 上一个选定时间步的alpha累积乘积，初始为1.0
-        new_betas = []            # 用于存储新的beta值列表
-        timestep_map = []         # 可能用于映射原始时间步到新时间步（这里未使用）
-        # 遍历原始的alphas_cumprod (父类DDPM中计算的)
+        last_alpha_cumprod = 1.0
+        new_betas = []
+        timestep_map = []
         for i, alpha_cumprod in enumerate(self.alphas_cumprod):
-            # 如果当前时间步 i 在我们希望使用的时间步集合 use_timesteps 中
             if i in use_timesteps:
-                # 根据当前alpha_cumprod和上一个选定时间步的last_alpha_cumprod计算新的beta值
                 new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
-                # 更新last_alpha_cumprod为当前的alpha_cumprod
                 last_alpha_cumprod = alpha_cumprod
-                # 将当前时间步i添加到timestep_map (这里实际未使用此列表后续)
                 timestep_map.append(i)
-        # 将new_betas中的PyTorch张量转换为NumPy数组
         new_betas = [beta.data.cpu().numpy() for beta in new_betas]
-        # 使用计算出的new_betas重新注册和计算所有与时间表相关的参数 (调用父类或自身的register_schedule)
-        # 注意：这里是覆盖了父类的部分时间表参数，使得扩散过程按照新的、可能更稀疏的时间步进行
         self.register_schedule(given_betas=np.array(new_betas), timesteps=len(new_betas), linear_start=kwargs['linear_start'], linear_end=kwargs['linear_end'])
-        # 保存原始选择的时间步（排序后），可能在后续映射时使用
         self.ori_timesteps = list(use_timesteps)
         self.ori_timesteps.sort()
 
     def make_cond_schedule(self, ):
-        # 创建一个张量 self.cond_ids，长度为当前模型总时间步数 (self.num_timesteps)
-        # 初始时，所有元素都填充为 self.num_timesteps - 1 (即最后一个时间步的索引)
         self.cond_ids = torch.full(size=(self.num_timesteps,), fill_value=self.num_timesteps - 1, dtype=torch.long)
-        # 生成一个从0到 self.num_timesteps - 1 的等差序列，序列长度为 self.num_timesteps_cond (构造函数中定义的条件应用步数)
-        # 然后四舍五入到最近的整数，并转换为长整型
         ids = torch.round(torch.linspace(0, self.num_timesteps - 1, self.num_timesteps_cond)).long()
-        # 将 self.cond_ids 的前 self.num_timesteps_cond 个元素替换为上面生成的 ids
-        # 这意味着条件将在这些选定的早期时间步被激活或更新
         self.cond_ids[:self.num_timesteps_cond] = ids
 
     @rank_zero_only
@@ -1799,14 +1728,16 @@ class LatentDiffusionSRTextWT(DDPM):
             else:
                 model = instantiate_from_config(config)
                 self.cond_stage_model = model.eval()
-                self.cond_stage_model.train = disabled_train
-                for param in self.cond_stage_model.parameters():
-                    param.requires_grad = False
+                # self.cond_stage_model.train = disabled_train
+                for name, param in self.cond_stage_model.named_parameters():
+                    if 'final_projector' not in name:
+                        param.requires_grad = False
         else:
             assert config != '__is_first_stage__'
             assert config != '__is_unconditional__'
             model = instantiate_from_config(config)
             self.cond_stage_model = model
+            self.cond_stage_model.train()
 
     def instantiate_structcond_stage(self, config):
         model = instantiate_from_config(config)
@@ -1946,86 +1877,46 @@ class LatentDiffusionSRTextWT(DDPM):
         to increase the degradation diversity in a batch.
         """
         # initialize
-        # 获取当前批次的低清图像 self.lq 的尺寸 (batch_size, channels, height, width)
         b, c, h, w = self.lq.size()
-        # 检查当前批次大小是否等于配置文件中指定的批次大小
-        # 这个方法只在完整的批次上操作
-        if b == self.configs.data.params.batch_size: # self.configs 可能是从外部传入的整体配置对象
-            # 如果队列大小 'queue_size' 还未初始化
+        if b == self.configs.data.params.batch_size:
             if not hasattr(self, 'queue_size'):
-                # 从配置中获取队列大小，默认为 batch_size * 50
                 self.queue_size = self.configs.data.params.train.params.get('queue_size', b*50)
-            # 如果低清图像队列 'queue_lr' 还未初始化
             if not hasattr(self, 'queue_lr'):
-                # 断言队列大小必须是批次大小的整数倍
                 assert self.queue_size % b == 0, f'queue size {self.queue_size} should be divisible by batch size {b}'
-                # 初始化低清图像队列，为一个全零张量，存储在CUDA上
                 self.queue_lr = torch.zeros(self.queue_size, c, h, w).cuda()
-                # 获取当前批次的高清图像 self.gt 的尺寸
-                _, c, h, w = self.gt.size() # 注意：这里的c,h,w可能会因为gt和lq的通道数/尺寸不同而改变
-                # 初始化高清图像队列，为一个全零张量，存储在CUDA上
+                _, c, h, w = self.gt.size()
                 self.queue_gt = torch.zeros(self.queue_size, c, h, w).cuda()
-                # 初始化队列指针为0，指向队列中下一个可填充的位置
                 self.queue_ptr = 0
-            # 如果队列指针等于队列大小，说明队列已满
-            if self.queue_ptr == self.queue_size:
-                # 执行出队和入队操作
-                # shuffle (随机打乱整个队列)
-                idx = torch.randperm(self.queue_size) # 生成一个随机的索引排列
-                self.queue_lr = self.queue_lr[idx]    # 按随机索引打乱低清队列
-                self.queue_gt = self.queue_gt[idx]    # 按随机索引打乱高清队列
-                # get first b samples (取出队列头部的 b 个样本作为出队样本)
-                lq_dequeue = self.queue_lr[0:b, :, :, :].clone() # 克隆，避免后续修改影响
+            if self.queue_ptr == self.queue_size:  # the pool is full
+                # do dequeue and enqueue
+                # shuffle
+                idx = torch.randperm(self.queue_size)
+                self.queue_lr = self.queue_lr[idx]
+                self.queue_gt = self.queue_gt[idx]
+                # get first b samples
+                lq_dequeue = self.queue_lr[0:b, :, :, :].clone()
                 gt_dequeue = self.queue_gt[0:b, :, :, :].clone()
-                # update the queue (将当前批次的 self.lq 和 self.gt 存入队列的头部，替换掉刚出队的样本)
+                # update the queue
                 self.queue_lr[0:b, :, :, :] = self.lq.clone()
                 self.queue_gt[0:b, :, :, :] = self.gt.clone()
 
-                # 将当前训练用的 self.lq 和 self.gt 替换为从队列中取出的样本
                 self.lq = lq_dequeue
                 self.gt = gt_dequeue
-            else: # 如果队列未满
-                # only do enqueue (只执行入队操作)
-                # 将当前批次的 self.lq 和 self.gt 添加到队列指针指向的位置
+            else:
+                # only do enqueue
                 self.queue_lr[self.queue_ptr:self.queue_ptr + b, :, :, :] = self.lq.clone()
                 self.queue_gt[self.queue_ptr:self.queue_ptr + b, :, :, :] = self.gt.clone()
-                # 移动队列指针
                 self.queue_ptr = self.queue_ptr + b
 
     def randn_cropinput(self, lq, gt, base_size=[64, 128, 256, 512]):
-        # 从预定义的 base_size 列表中随机选择一个作为当前裁剪块的高度
         cur_size_h = random.choice(base_size)
-        # 从预定义的 base_size 列表中随机选择一个作为当前裁剪块的宽度
         cur_size_w = random.choice(base_size)
-
-        # 计算输入低分辨率图像 lq 的中心点y坐标 (高度的中心)
-        # lq.size(-2) 获取倒数第二个维度的大小，即高度
-        init_h = lq.size(-2) // 2
-        # 计算输入低分辨率图像 lq 的中心点x坐标 (宽度的中心)
-        # lq.size(-1) 获取最后一个维度的大小，即宽度
-        init_w = lq.size(-1) // 2
-
-        # 对低分辨率图像 lq 进行中心裁剪
-        # 裁剪区域的起始y坐标: 中心点y - 裁剪高度的一半
-        # 裁剪区域的结束y坐标: 中心点y + 裁剪高度的一半
-        # 裁剪区域的起始x坐标: 中心点x - 裁剪宽度的一半
-        # 裁剪区域的结束x坐标: 中心点x + 裁剪宽度的一半
-        # 注意：这里的裁剪是针对批次中的所有图像进行的 (:)
-        lq = lq[:, :, init_h - cur_size_h // 2 : init_h + cur_size_h // 2, \
-                      init_w - cur_size_w // 2 : init_w + cur_size_w // 2]
-
-        # 对高分辨率图像 gt 进行同样的中心裁剪
-        # 确保lq和gt的裁剪区域在原始图像中是对应的
-        gt = gt[:, :, init_h - cur_size_h // 2 : init_h + cur_size_h // 2, \
-                      init_w - cur_size_w // 2 : init_w + cur_size_w // 2]
-
-        # 断言：确保裁剪后的低分辨率图像的宽度至少为64像素
-        assert lq.size(-1) >= 64
-        # 断言：确保裁剪后的低分辨率图像的高度至少为64像素
-        # 这可能是为了满足后续网络层对输入尺寸的最小要求
-        assert lq.size(-2) >= 64
-
-        # 返回裁剪后的低分辨率图像和高分辨率图像组成的列表
+        init_h = lq.size(-2)//2
+        init_w = lq.size(-1)//2
+        lq = lq[:, :, init_h-cur_size_h//2:init_h+cur_size_h//2, init_w-cur_size_w//2:init_w+cur_size_w//2]
+        gt = gt[:, :, init_h-cur_size_h//2:init_h+cur_size_h//2, init_w-cur_size_w//2:init_w+cur_size_w//2]
+        assert lq.size(-1)>=64
+        assert lq.size(-2)>=64
         return [lq, gt]
 
     @torch.no_grad()
@@ -2401,39 +2292,38 @@ class LatentDiffusionSRTextWT(DDPM):
         return loss
 
     def forward(self, x, c, gt, *args, **kwargs):
-        index = np.random.randint(0, self.num_timesteps, size=x.size(0))  # 随机选择一个扩散时间步索引
-        t = torch.from_numpy(index) 
+        index = np.random.randint(0, self.num_timesteps, size=x.size(0))
+        t = torch.from_numpy(index)
         t = t.to(self.device).long()
 
         t_ori = torch.tensor([self.ori_timesteps[index_i] for index_i in index])
         t_ori = t_ori.long().to(x.device)
 
-        if self.model.conditioning_key is not None:  # self.model是DiffusionWrapper,是U-Net,conditioning_key是'c_concat'等，决定unet如何使用条件
+        if self.model.conditioning_key is not None:
             assert c is not None
-            if self.cond_stage_trainable:   # 如果模型是可以训练的
-                c = self.get_learned_conditioning(c)  # 这个方法内部通常会调用 self.cond_stage_model.encode(c) 或 self.cond_stage_model(c) 来将原始条件（如文本）编码成U-Net可以使用的特征向量。
+            if self.cond_stage_trainable:
+                c = self.get_learned_conditioning(c)
             else:
-                c = self.cond_stage_model(c)  # 如果条件模型不可训练（例如，一个冻结的CLIP文本编码器），直接调用 c = self.cond_stage_model(c) 来获取编码后的条件。
-            if self.shorten_cond_schedule:  # TODO: drop this option 
-                # 如果启用了条件调度缩短，会对编码后的条件 c 进行进一步的 q_sample 操作，使其也带上一些噪声，这是一种特殊的条件处理方式。
-                print(s)
+                c = self.cond_stage_model(c)
+            if self.shorten_cond_schedule:  # TODO: drop this option
+                # print(s)
                 tc = self.cond_ids[t].to(self.device)
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
         if self.test_gt:
             struc_c = self.structcond_stage_model(gt, t_ori)
         else:
-            struc_c = self.structcond_stage_model(x, t_ori)  # 否则（例如在训练时，或者测试时不使用真实GT作为结构条件），struc_c = self.structcond_stage_model(x, t_ori)。这里使用低清图像的潜变量 x 和原始时间步 t_ori 作为结构条件模型的输入。
-        return self.p_losses(gt, c, struc_c, t, t_ori, x, *args, **kwargs) # 最后，调用 self.p_losses 方法计算损失。
+            struc_c = self.structcond_stage_model(x, t_ori)
+        return self.p_losses(gt, c, struc_c, t, t_ori, x, *args, **kwargs)
 
-    def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
-        def rescale_bbox(bbox):
-            x0 = clamp((bbox[0] - crop_coordinates[0]) / crop_coordinates[2])
-            y0 = clamp((bbox[1] - crop_coordinates[1]) / crop_coordinates[3])
-            w = min(bbox[2] / crop_coordinates[2], 1 - x0)
-            h = min(bbox[3] / crop_coordinates[3], 1 - y0)
-            return x0, y0, w, h    
-
-        return [rescale_bbox(b) for b in bboxes]
+    # def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
+    #     def rescale_bbox(bbox):
+    #         x0 = clamp((bbox[0] - crop_coordinates[0]) / crop_coordinates[2])
+    #         y0 = clamp((bbox[1] - crop_coordinates[1]) / crop_coordinates[3])
+    #         w = min(bbox[2] / crop_coordinates[2], 1 - x0)
+    #         h = min(bbox[3] / crop_coordinates[3], 1 - y0)
+    #         return x0, y0, w, h
+    #
+    #     return [rescale_bbox(b) for b in bboxes]
 
     def apply_model(self, x_noisy, t, cond, struct_cond, return_ids=False):
 
@@ -2610,22 +2500,12 @@ class LatentDiffusionSRTextWT(DDPM):
         return loss, loss_dict
 
     def p_mean_variance(self, x, c, struct_cond, t, clip_denoised: bool, return_codebook_ids=False, quantize_denoised=False,
-                        return_x0=False, score_corrector=None, corrector_kwargs=None, t_replace=None, unconditional_conditioning=None, unconditional_guidance_scale=None,
-                        reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000]):
+                        return_x0=False, score_corrector=None, corrector_kwargs=None, t_replace=None):
         if t_replace is None:
             t_in = t
         else:
             t_in = t_replace
-
-        if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
-            model_out = self.apply_model(x, t_in, c, struct_cond, return_ids=return_codebook_ids)
-        else:
-            x_in = torch.cat([x] * 2)
-            t_in_ = torch.cat([t_in] * 2)
-            c_in = torch.cat([unconditional_conditioning, c])
-            e_t_uncond, e_t = self.apply_model(x_in, t_in_, c_in, struct_cond, return_ids=False).chunk(2)
-            model_out = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond)
-            return_codebook_ids=False
+        model_out = self.apply_model(x, t_in, c, struct_cond, return_ids=return_codebook_ids)
 
         if score_corrector is not None:
             assert self.parameterization == "eps"
@@ -2643,25 +2523,6 @@ class LatentDiffusionSRTextWT(DDPM):
         else:
             raise NotImplementedError()
 
-        if reference_sr is not None:
-            # apply reference guidance
-            if t[0] >= reference_range[0] and t[0] <= reference_range[1]:
-                xstart_current = x_recon.detach().clone().requires_grad_(True)
-                xstart_pred = x_recon.detach().clone().requires_grad_(False)
-                for _ in range(reference_step):
-                    with torch.enable_grad():
-                        tau0 = torch.ones_like(xstart_current) * reference_lr
-                        mask = torch.ones_like(xstart_current)
-                        tau0 = tau0*mask
-                        delta_y = torch.square(reference_sr - xstart_current).sum() / reference_sr.shape[0]
-                        gradient = torch.autograd.grad(delta_y, xstart_current)[0] * tau0
-                        assert not torch.isnan(gradient).any()
-                        new_xstart = (
-                            xstart_current.float().detach() - gradient.float()
-                        )
-                    xstart_current = new_xstart.detach().requires_grad_(True)
-                x_recon = xstart_current.detach().clone()
-
         if clip_denoised:
             x_recon.clamp_(-1., 1.)
         if quantize_denoised:
@@ -2675,9 +2536,10 @@ class LatentDiffusionSRTextWT(DDPM):
             return model_mean, posterior_variance, posterior_log_variance
 
     def p_mean_variance_canvas(self, x, c, struct_cond, t, clip_denoised: bool, return_codebook_ids=False, quantize_denoised=False,
-                        return_x0=False, score_corrector=None, corrector_kwargs=None, t_replace=None, tile_size=64, tile_overlap=32, batch_size=4, tile_weights=None,
-                        unconditional_conditioning=None, unconditional_guidance_scale=None,
-                        reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000]):
+                        return_x0=False, score_corrector=None, corrector_kwargs=None, t_replace=None, tile_size=64, tile_overlap=32, batch_size=4, tile_weights=None):
+        """
+        Aggregation Sampling strategy for arbitrary-size image super-resolution
+        """
         assert tile_weights is not None
 
         if t_replace is None:
@@ -2737,17 +2599,8 @@ class LatentDiffusionSRTextWT(DDPM):
                     input_list = torch.cat(input_list, dim=0)
                     cond_list = torch.cat(cond_list, dim=0)
 
-                    if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
-                        struct_cond_input = self.structcond_stage_model(cond_list, t_in[:input_list.size(0)])
-                        model_out = self.apply_model(input_list, t_in[:input_list.size(0)], c[:input_list.size(0)], struct_cond_input, return_ids=return_codebook_ids)
-                    else:
-                        input_list_ = torch.cat([input_list] * 2)
-                        t_in_ = torch.cat([t_in[:input_list.size(0)]] * 2)
-                        struct_cond_input = self.structcond_stage_model(torch.cat([cond_list] * 2), t_in_)
-                        c_in = torch.cat([unconditional_conditioning[:input_list.size(0)], c[:input_list.size(0)]])
-                        e_t_uncond, e_t = self.apply_model(input_list_, t_in_, c_in, struct_cond_input, return_ids=False).chunk(2)
-                        model_out = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond)
-                        return_codebook_ids=False
+                    struct_cond_input = self.structcond_stage_model(cond_list, t_in[:input_list.size(0)])
+                    model_out = self.apply_model(input_list, t_in[:input_list.size(0)], c[:input_list.size(0)], struct_cond_input, return_ids=return_codebook_ids)
 
                     if score_corrector is not None:
                         assert self.parameterization == "eps"
@@ -2788,7 +2641,6 @@ class LatentDiffusionSRTextWT(DDPM):
                 # print(noise_pred.size())
                 noise_pred[:, :, input_start_y:input_end_y, input_start_x:input_end_x] += noise_preds[row][col] * tile_weights
                 contributors[:, :, input_start_y:input_end_y, input_start_x:input_end_x] += tile_weights
-                # contributors[:, :, input_start_y:input_end_y, input_start_x:input_end_x] += tile_weights * tile_weights
         # Average overlapping areas with more than 1 contributor
         noise_pred /= contributors
         # noise_pred /= torch.sqrt(contributors)
@@ -2802,25 +2654,6 @@ class LatentDiffusionSRTextWT(DDPM):
             x_recon = self.predict_start_from_z_and_v(x, model_out, t[:model_out.size(0)])
         else:
             raise NotImplementedError()
-
-        if reference_sr is not None:
-            # apply reference guidance
-            if t[0] >= reference_range[0] and t[0] <= reference_range[1]:
-                xstart_current = x_recon.detach().clone().requires_grad_(True)
-                xstart_pred = x_recon.detach().clone().requires_grad_(False)
-                for _ in range(reference_step):
-                    with torch.enable_grad():
-                        tau0 = torch.ones_like(xstart_current) * reference_lr
-                        mask = torch.ones_like(xstart_current)
-                        tau0 = tau0*mask
-                        delta_y = torch.square(reference_sr - xstart_current).sum() / reference_sr.shape[0]
-                        gradient = torch.autograd.grad(delta_y, xstart_current)[0] * tau0
-                        assert not torch.isnan(gradient).any()
-                        new_xstart = (
-                            xstart_current.float().detach() - gradient.float()
-                        )
-                    xstart_current = new_xstart.detach().requires_grad_(True)
-                x_recon = xstart_current.detach().clone()
 
         if clip_denoised:
             x_recon.clamp_(-1., 1.)
@@ -2838,17 +2671,13 @@ class LatentDiffusionSRTextWT(DDPM):
     @torch.no_grad()
     def p_sample(self, x, c, struct_cond, t, clip_denoised=False, repeat_noise=False,
                  return_codebook_ids=False, quantize_denoised=False, return_x0=False,
-                 temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None, t_replace=None,
-                 unconditional_conditioning=None, unconditional_guidance_scale=None,
-                 reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000]):
+                 temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None, t_replace=None):
         b, *_, device = *x.shape, x.device
         outputs = self.p_mean_variance(x=x, c=c, struct_cond=struct_cond, t=t, clip_denoised=clip_denoised,
                                        return_codebook_ids=return_codebook_ids,
                                        quantize_denoised=quantize_denoised,
                                        return_x0=return_x0,
-                                       score_corrector=score_corrector, corrector_kwargs=corrector_kwargs, t_replace=t_replace,
-                                       unconditional_conditioning=unconditional_conditioning, unconditional_guidance_scale=unconditional_guidance_scale,
-                                       reference_sr=reference_sr, reference_lr=reference_lr, reference_step=reference_step, reference_range=reference_range)
+                                       score_corrector=score_corrector, corrector_kwargs=corrector_kwargs, t_replace=t_replace)
         if return_codebook_ids:
             raise DeprecationWarning("Support dropped.")
             model_mean, _, model_log_variance, logits = outputs
@@ -2874,17 +2703,14 @@ class LatentDiffusionSRTextWT(DDPM):
     def p_sample_canvas(self, x, c, struct_cond, t, clip_denoised=False, repeat_noise=False,
                  return_codebook_ids=False, quantize_denoised=False, return_x0=False,
                  temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None, t_replace=None,
-                 tile_size=64, tile_overlap=32, batch_size=4, tile_weights=None, unconditional_conditioning=None, unconditional_guidance_scale=None,
-                 reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000]):
+                 tile_size=64, tile_overlap=32, batch_size=4, tile_weights=None):
         b, *_, device = *x.shape, x.device
         outputs = self.p_mean_variance_canvas(x=x, c=c, struct_cond=struct_cond, t=t, clip_denoised=clip_denoised,
                                        return_codebook_ids=return_codebook_ids,
                                        quantize_denoised=quantize_denoised,
                                        return_x0=return_x0,
                                        score_corrector=score_corrector, corrector_kwargs=corrector_kwargs, t_replace=t_replace,
-                                       tile_size=tile_size, tile_overlap=tile_overlap, batch_size=batch_size, tile_weights=tile_weights,
-                                       unconditional_conditioning=unconditional_conditioning, unconditional_guidance_scale=unconditional_guidance_scale,
-                                       reference_sr=reference_sr, reference_lr=reference_lr, reference_step=reference_step, reference_range=reference_range)
+                                       tile_size=tile_size, tile_overlap=tile_overlap, batch_size=batch_size, tile_weights=tile_weights)
         if return_codebook_ids:
             raise DeprecationWarning("Support dropped.")
             model_mean, _, model_log_variance, logits = outputs
@@ -2966,10 +2792,7 @@ class LatentDiffusionSRTextWT(DDPM):
     def p_sample_loop(self, cond, struct_cond, shape, return_intermediates=False,
                       x_T=None, verbose=True, callback=None, timesteps=None, quantize_denoised=False,
                       mask=None, x0=None, img_callback=None, start_T=None,
-                      log_every_t=None, time_replace=None, adain_fea=None, interfea_path=None,
-                      unconditional_conditioning=None,
-                      unconditional_guidance_scale=None,
-                      reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000]):
+                      log_every_t=None, time_replace=None, adain_fea=None, interfea_path=None):
 
         if not log_every_t:
             log_every_t = self.log_every_t
@@ -3021,10 +2844,7 @@ class LatentDiffusionSRTextWT(DDPM):
 
             img = self.p_sample(img, cond, struct_cond_input, ts,
                                 clip_denoised=self.clip_denoised,
-                                quantize_denoised=quantize_denoised, t_replace=t_replace,
-                                unconditional_conditioning=unconditional_conditioning,
-                                unconditional_guidance_scale=unconditional_guidance_scale,
-                                reference_sr=reference_sr, reference_lr=reference_lr, reference_step=reference_step, reference_range=reference_range)
+                                quantize_denoised=quantize_denoised, t_replace=t_replace)
 
             if adain_fea is not None:
                 if i < 1:
@@ -3088,9 +2908,7 @@ class LatentDiffusionSRTextWT(DDPM):
     def p_sample_loop_canvas(self, cond, struct_cond, shape, return_intermediates=False,
                       x_T=None, verbose=True, callback=None, timesteps=None, quantize_denoised=False,
                       mask=None, x0=None, img_callback=None, start_T=None,
-                      log_every_t=None, time_replace=None, adain_fea=None, interfea_path=None, tile_size=64, tile_overlap=32, batch_size=4,
-                      unconditional_conditioning=None, unconditional_guidance_scale=None,
-                      reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000],):
+                      log_every_t=None, time_replace=None, adain_fea=None, interfea_path=None, tile_size=64, tile_overlap=32, batch_size=4):
 
         assert tile_size is not None
 
@@ -3131,21 +2949,19 @@ class LatentDiffusionSRTextWT(DDPM):
                 tc = self.cond_ids[ts].to(cond.device)
                 cond = self.q_sample(x_start=cond, t=tc, noise=torch.randn_like(cond))
 
-            if interfea_path is not None:
-                for batch_i in range(struct_cond_input['64'].size(0)):
-                    os.makedirs(os.path.join(interfea_path, 'fea_'+str(batch_i)+'_64'), exist_ok=True)
-                    cur_path = os.path.join(interfea_path, 'fea_'+str(batch_i)+'_64', 'step_'+str(i)+'.png')
-                    visualize_fea(cur_path, struct_cond_input['64'][batch_i, 0])
-                    os.makedirs(os.path.join(interfea_path, 'fea_'+str(batch_i)+'_32'), exist_ok=True)
-                    cur_path = os.path.join(interfea_path, 'fea_'+str(batch_i)+'_32', 'step_'+str(i)+'.png')
-                    visualize_fea(cur_path, struct_cond_input['32'][batch_i, 0])
+            # if interfea_path is not None:
+            #     for batch_i in range(struct_cond_input['64'].size(0)):
+            #         os.makedirs(os.path.join(interfea_path, 'fea_'+str(batch_i)+'_64'), exist_ok=True)
+            #         cur_path = os.path.join(interfea_path, 'fea_'+str(batch_i)+'_64', 'step_'+str(i)+'.png')
+            #         visualize_fea(cur_path, struct_cond_input['64'][batch_i, 0])
+            #         os.makedirs(os.path.join(interfea_path, 'fea_'+str(batch_i)+'_32'), exist_ok=True)
+            #         cur_path = os.path.join(interfea_path, 'fea_'+str(batch_i)+'_32', 'step_'+str(i)+'.png')
+            #         visualize_fea(cur_path, struct_cond_input['32'][batch_i, 0])
 
             img = self.p_sample_canvas(img, cond, struct_cond, ts,
                                 clip_denoised=self.clip_denoised,
                                 quantize_denoised=quantize_denoised, t_replace=t_replace,
-                                tile_size=tile_size, tile_overlap=tile_overlap, batch_size=batch_size, tile_weights=tile_weights,
-                                unconditional_conditioning=unconditional_conditioning, unconditional_guidance_scale=unconditional_guidance_scale,
-                                reference_sr=reference_sr, reference_lr=reference_lr, reference_step=reference_step, reference_range=reference_range,)
+                                tile_size=tile_size, tile_overlap=tile_overlap, batch_size=batch_size, tile_weights=tile_weights)
 
             if adain_fea is not None:
                 if i < 1:
@@ -3166,11 +2982,7 @@ class LatentDiffusionSRTextWT(DDPM):
     @torch.no_grad()
     def sample(self, cond, struct_cond, batch_size=16, return_intermediates=False, x_T=None,
                verbose=True, timesteps=None, quantize_denoised=False,
-               mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, start_T=None,
-               unconditional_conditioning=None,
-               unconditional_guidance_scale=None,
-               reference_sr=None, reference_lr=0.05, reference_step=1, reference_range=[100, 1000],
-               **kwargs):
+               mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, start_T=None, **kwargs):
 
         if shape is None:
             shape = (batch_size, self.channels, self.image_size//8, self.image_size//8)
@@ -3185,16 +2997,12 @@ class LatentDiffusionSRTextWT(DDPM):
                                   shape,
                                   return_intermediates=return_intermediates, x_T=x_T,
                                   verbose=verbose, timesteps=timesteps, quantize_denoised=quantize_denoised,
-                                  mask=mask, x0=x0, time_replace=time_replace, adain_fea=adain_fea, interfea_path=interfea_path, start_T=start_T,
-                                  unconditional_conditioning=unconditional_conditioning,
-                                  unconditional_guidance_scale=unconditional_guidance_scale,
-                                  reference_sr=reference_sr, reference_lr=reference_lr, reference_step=reference_step, reference_range=reference_range)
+                                  mask=mask, x0=x0, time_replace=time_replace, adain_fea=adain_fea, interfea_path=interfea_path, start_T=start_T)
 
     @torch.no_grad()
     def sample_canvas(self, cond, struct_cond, batch_size=16, return_intermediates=False, x_T=None,
                verbose=True, timesteps=None, quantize_denoised=False,
-               mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, tile_size=64, tile_overlap=32, batch_size_sample=4, log_every_t=None,
-               unconditional_conditioning=None, unconditional_guidance_scale=None, **kwargs):
+               mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, tile_size=64, tile_overlap=32, batch_size_sample=4, log_every_t=None, **kwargs):
 
         if shape is None:
             shape = (batch_size, self.channels, self.image_size//8, self.image_size//8)
@@ -3209,8 +3017,7 @@ class LatentDiffusionSRTextWT(DDPM):
                                   shape,
                                   return_intermediates=return_intermediates, x_T=x_T,
                                   verbose=verbose, timesteps=timesteps, quantize_denoised=quantize_denoised,
-                                  mask=mask, x0=x0, time_replace=time_replace, adain_fea=adain_fea, interfea_path=interfea_path, tile_size=tile_size, tile_overlap=tile_overlap,
-                                  unconditional_conditioning=unconditional_conditioning, unconditional_guidance_scale=unconditional_guidance_scale, batch_size=batch_size_sample, log_every_t=log_every_t)
+                                  mask=mask, x0=x0, time_replace=time_replace, adain_fea=adain_fea, interfea_path=interfea_path, tile_size=tile_size, tile_overlap=tile_overlap, batch_size=batch_size_sample, log_every_t=log_every_t)
 
     @torch.no_grad()
     def sample_log(self,cond,struct_cond,batch_size,ddim, ddim_steps,**kwargs):
@@ -3292,14 +3099,14 @@ class LatentDiffusionSRTextWT(DDPM):
                 denoise_grid = self._get_denoise_row_from_list(z_denoise_row)
                 log["denoise_row"] = denoise_grid
 
-            if quantize_denoised and not isinstance(self.first_stage_model, AutoencoderKL) and not isinstance(
-                    self.first_stage_model, IdentityFirstStage):
-                with self.ema_scope("Plotting Quantized Denoised"):
-                    samples, z_denoise_row = self.sample_log(cond=c,struct_cond=struct_cond,batch_size=N,ddim=use_ddim,
-                                                             ddim_steps=ddim_steps,eta=ddim_eta,
-                                                             quantize_denoised=True, x_T=x_T)
-                x_samples = self.decode_first_stage(samples.to(self.device))
-                log["samples_x0_quantized"] = x_samples
+            # if quantize_denoised and not isinstance(self.first_stage_model, AutoencoderKL) and not isinstance(
+            #         self.first_stage_model, IdentityFirstStage):
+            #     with self.ema_scope("Plotting Quantized Denoised"):
+            #         samples, z_denoise_row = self.sample_log(cond=c,struct_cond=struct_cond,batch_size=N,ddim=use_ddim,
+            #                                                  ddim_steps=ddim_steps,eta=ddim_eta,
+            #                                                  quantize_denoised=True, x_T=x_T)
+            #     x_samples = self.decode_first_stage(samples.to(self.device))
+            #     log["samples_x0_quantized"] = x_samples
 
             if inpaint:
                 assert NotImplementedError
@@ -3372,83 +3179,6 @@ class LatentDiffusionSRTextWT(DDPM):
         x = 2. * (x - x.min()) / (x.max() - x.min()) - 1.
         return x
 
-class LatentDiffusionSRTextWTFFHQ(LatentDiffusionSRTextWT): 
-
-    @torch.no_grad()
-    def get_input(self, batch, k=None, return_first_stage_outputs=False, force_c_encode=False,
-                  cond_key=None, return_original_cond=False, bs=None, val=False, text_cond=[''], return_gt=False, resize_lq=True):
-
-        im_gt = batch['gt'].cuda()
-        im_gt = im_gt.to(memory_format=torch.contiguous_format).float()
-        im_lq = batch['lq'].cuda()
-        im_lq = im_lq.to(memory_format=torch.contiguous_format).float()
-
-        # clamp and round
-        im_lq = torch.clamp(im_lq, 0, 1.0)
-
-        self.gt = im_gt
-        self.lq = im_lq
-
-        if resize_lq:
-            self.lq = F.interpolate(
-                    self.lq,
-                    size=(self.gt.size(-2),
-                          self.gt.size(-1)),
-                    mode='bicubic',
-                    )
-
-        # training pair pool
-        if not val and not self.random_size:
-            self._dequeue_and_enqueue()
-        # sharpen self.gt again, as we have changed the self.gt with self._dequeue_and_enqueue
-        self.lq = self.lq.contiguous()  # for the warning: grad and param do not obey the gradient layout contract
-        self.lq = self.lq*2 - 1.0
-        self.gt = self.gt*2 - 1.0
-
-        if self.random_size:
-            self.lq, self.gt = self.randn_cropinput(self.lq, self.gt)
-
-        self.lq = torch.clamp(self.lq, -1.0, 1.0)
-
-        if random.random() < 0.005:
-            self.lq = self.gt
-
-        x = self.lq
-        y = self.gt
-        if bs is not None:
-            x = x[:bs]
-            y = y[:bs]
-        x = x.to(self.device)
-        y = y.to(self.device)
-        encoder_posterior = self.encode_first_stage(x)
-        z = self.get_first_stage_encoding(encoder_posterior).detach()
-
-        encoder_posterior_y = self.encode_first_stage(y)
-        z_gt = self.get_first_stage_encoding(encoder_posterior_y).detach()
-
-        xc = None
-        if self.use_positional_encodings:
-            assert NotImplementedError
-            pos_x, pos_y = self.compute_latent_shifts(batch)
-            c = {'pos_x': pos_x, 'pos_y': pos_y}
-
-        while len(text_cond) < z.size(0):
-            text_cond.append(text_cond[-1])
-        if len(text_cond) > z.size(0):
-            text_cond = text_cond[:z.size(0)]
-        assert len(text_cond) == z.size(0)
-
-        out = [z, text_cond]
-        out.append(z_gt)
-
-        if return_first_stage_outputs:
-            xrec = self.decode_first_stage(z_gt)
-            out.extend([x, self.gt, xrec])
-        if return_original_cond:
-            out.append(xc)
-
-        return out
-
 class DiffusionWrapper(pl.LightningModule):
     def __init__(self, diff_model_config, conditioning_key):
         super().__init__()
@@ -3502,3 +3232,131 @@ class Layout2ImgDiffusion(LatentDiffusion):
         cond_img = torch.stack(bbox_imgs, dim=0)
         logs['bbox_image'] = cond_img
         return logs
+
+
+class LatentDiffusionSRTextWTChangeInfStep(LatentDiffusionSRTextWT):
+    # def __init__(self, first_stage_config,cond_stage_config,structcond_stage_config, p_sample_step = 100):
+    #     super(LatentDiffusionSRTextWTChangeInfStep, self).__init__()
+    #     self.p_samle_step = p_sample_step
+    @torch.no_grad()
+    def sample(self, cond, struct_cond, p_sample_step = 100, batch_size=16, return_intermediates=False, x_T=None,
+               verbose=True, timesteps=None, quantize_denoised=False,
+               mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, start_T=None, **kwargs):
+
+        if shape is None:
+            shape = (batch_size, self.channels, self.image_size//8, self.image_size//8)
+        if cond is not None:
+            if isinstance(cond, dict):
+                cond = {key: cond[key][:batch_size] if not isinstance(cond[key], list) else
+                list(map(lambda x: x[:batch_size], cond[key])) for key in cond}
+            else:
+                cond = [c[:batch_size] for c in cond] if isinstance(cond, list) else cond[:batch_size]
+        return self.p_sample_loop(cond,
+                                  struct_cond,
+                                  shape,
+                                  p_sample_step = p_sample_step,
+                                  return_intermediates=return_intermediates, x_T=x_T,
+                                  verbose=verbose, timesteps=timesteps, quantize_denoised=quantize_denoised,
+                                  mask=mask, x0=x0, time_replace=time_replace, adain_fea=adain_fea, interfea_path=interfea_path, start_T=start_T)
+    @torch.no_grad()
+    def p_sample_loop(self, cond, struct_cond, shape, p_sample_step = 100, return_intermediates=False,
+                      x_T=None, verbose=True, callback=None, timesteps=None, quantize_denoised=False,
+                      mask=None, x0=None, img_callback=None, start_T=None,
+                      log_every_t=None, time_replace=None, adain_fea=None, interfea_path=None):
+
+        if not log_every_t:
+            log_every_t = self.log_every_t
+        device = self.betas.device
+        b = shape[0]
+        if x_T is None:
+            img = torch.randn(shape, device=device)
+        else:
+            img = x_T
+
+        intermediates = [img]
+        if timesteps is None:
+            timesteps = self.num_timesteps
+
+        iterator = tqdm(reversed(range(0, timesteps)), desc='Sampling t', total=timesteps) if verbose else reversed(
+            range(0, timesteps))
+
+        if mask is not None:
+            assert x0 is not None
+            assert x0.shape[2:3] == mask.shape[2:3]  # spatial size has to match
+
+        batch_list = []
+        for i in iterator:
+            if i > p_sample_step:
+                continue
+            if time_replace is None or time_replace == 1000:
+                ts = torch.full((b,), i, device=device, dtype=torch.long)
+                t_replace = None
+            else:
+                ts = torch.full((b,), i, device=device, dtype=torch.long)
+                t_replace = repeat(torch.tensor([self.ori_timesteps[i]]), '1 -> b', b=img.size(0))
+                t_replace = t_replace.long().to(device)
+            if self.shorten_cond_schedule:
+                assert self.model.conditioning_key != 'hybrid'
+                tc = self.cond_ids[ts].to(cond.device)
+                cond = self.q_sample(x_start=cond, t=tc, noise=torch.randn_like(cond))
+
+            if t_replace is not None:
+                if start_T is not None:
+                    if self.ori_timesteps[i] > start_T:
+                        continue
+                struct_cond_input = self.structcond_stage_model(struct_cond, t_replace)
+            else:
+                if start_T is not None:
+                    if i > start_T:
+                        continue
+                struct_cond_input = self.structcond_stage_model(struct_cond, ts)
+
+            if interfea_path is not None:
+                batch_list.append(struct_cond_input)
+
+            img = self.p_sample(img, cond, struct_cond_input, ts,
+                                clip_denoised=self.clip_denoised,
+                                quantize_denoised=quantize_denoised, t_replace=t_replace)
+
+            if adain_fea is not None:
+                if i < 1:
+                    img = adaptive_instance_normalization(img, adain_fea)
+            if mask is not None:
+                img_orig = self.q_sample(x0, ts)
+                img = img_orig * mask + (1. - mask) * img
+
+            if i % log_every_t == 0 or i == timesteps - 1:
+                intermediates.append(img)
+            if callback: callback(i)
+            if img_callback: img_callback(img, i)
+        if len(batch_list) > 0:
+            num_batch = batch_list[0]['64'].size(0)
+            for batch_i in range(num_batch):
+                batch64_list = []
+                batch32_list = []
+                for num_i in range(len(batch_list)):
+                    batch64_list.append(cal_pca_components(batch_list[num_i]['64'][batch_i], 3))
+                    batch32_list.append(cal_pca_components(batch_list[num_i]['32'][batch_i], 3))
+                batch64_list = np.array(batch64_list)
+                batch32_list = np.array(batch32_list)
+
+                batch64_list = batch64_list - np.min(batch64_list)
+                batch64_list = batch64_list / np.max(batch64_list)
+                batch32_list = batch32_list - np.min(batch32_list)
+                batch32_list = batch32_list / np.max(batch32_list)
+
+                total_num = batch64_list.shape[0]
+
+                for index in range(total_num):
+                    os.makedirs(os.path.join(interfea_path, 'fea_' + str(batch_i) + '_64'), exist_ok=True)
+                    cur_path = os.path.join(interfea_path, 'fea_' + str(batch_i) + '_64',
+                                            'step_' + str(total_num - index) + '.png')
+                    visualize_fea(cur_path, batch64_list[index])
+                    os.makedirs(os.path.join(interfea_path, 'fea_' + str(batch_i) + '_32'), exist_ok=True)
+                    cur_path = os.path.join(interfea_path, 'fea_' + str(batch_i) + '_32',
+                                            'step_' + str(total_num - index) + '.png')
+                    visualize_fea(cur_path, batch32_list[index])
+
+        if return_intermediates:
+            return img, intermediates
+        return img

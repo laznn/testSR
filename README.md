@@ -1,222 +1,150 @@
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/22350795/236680126-0b1cdd62-d6fc-4620-b998-75ed6c31bf6f.png" height=40>
-</p>
+## Getting started for Diffusion-based Models
 
-## Exploiting Diffusion Prior for Real-World Image Super-Resolution
+### 1.Installation
+ - Python == 3.9
+ - CUDA == 11.7
+ - PyTorch == 1.10
+ - ninja
+ - loguru
+ - prettytable
 
-[Paper](https://arxiv.org/abs/2305.07015) | [Project Page](https://iceclear.github.io/projects/stablesr/) | [Video](https://www.youtube.com/watch?v=5MZy9Uhpkw4) | [WebUI](https://github.com/pkuliyi2015/sd-webui-stablesr) | [ModelScope](https://modelscope.cn/models/xhlin129/cv_stablesr_image-super-resolution/summary) | [ComfyUI](https://github.com/gameltb/comfyui-stablesr)
+**Since we implement SSL with a hand-crafted CUDA operator, 
+please make sure you have already installed a correct CUDA version. 
+We have tested that the CUDA version from 11.3 to 11.7 is just OK.**
+
+ - clone this repo.
+> git clone https://github.com/ChrisDud0257/SSL && cd Diffusion-Based-SR
+
+ - Since this example code is integrated into [StableSR](https://github.com/IceClear/StableSR), please follow their instrucations for installation. For the integration to other diffusion framework, please refer to the [Integration to other diffusion framework](#other_diffusion_framework).
+
+### 2.Data preparation:
+Please refer to [the instructions in GAN-Based-SR](../GAN-Based-SR/README.md) for details.
+
+### 3.Training commands
+
+You can use the following command to start the training:
+> python3 main.py --train --base configs/SSL/base.yaml --gpus 0,1 --name stablesr_ssl --scale_lr False --logdir experiments
+
+*Remember to modify the base.yml according to your settings, such as the data paths and pretrained model path of [VAE](https://github.com/IceClear/StableSR).*
 
 
-<a href="https://colab.research.google.com/drive/11SE2_oDvbYtcuHDbaLAxsKk_o3flsO1T?usp=sharing"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="google colab logo"></a> [![Hugging Face](https://img.shields.io/badge/Demo-%F0%9F%A4%97%20Hugging%20Face-blue)](https://huggingface.co/spaces/Iceclear/StableSR) [![Replicate](https://img.shields.io/badge/Demo-%F0%9F%9A%80%20Replicate-blue)](https://replicate.com/cjwbw/stablesr) [![OpenXLab](https://img.shields.io/badge/Demo-%F0%9F%90%BC%20OpenXLab-blue)](https://openxlab.org.cn/apps/detail/Iceclear/StableSR) ![visitors](https://visitor-badge.laobi.icu/badge?page_id=IceClear/StableSR)
+## 4. Testing commands
 
+You can use the following command to test the trained model:
+> python test.py --config configs/SSL/base.yaml --ckpt xxx.ckpt --vqgan_ckpt vqgan.ckpt --init-img path_to_LR --outdir results --ddpm_steps 200 --dec_w 0.0 --colorfix_type adain --random-count 1
 
-[Jianyi Wang](https://iceclear.github.io/), [Zongsheng Yue](https://zsyoaoa.github.io/), [Shangchen Zhou](https://shangchenzhou.com/), [Kelvin C.K. Chan](https://ckkelvinchan.github.io/), [Chen Change Loy](https://www.mmlab-ntu.com/person/ccloy/)
+*Please to set the path of test folder and models.*
 
-S-Lab, Nanyang Technological University
+## 5. Trained models
+You could download all of our well-trained models through [GoogleDrive]
+or [BaiduDrive].
 
-<img src="assets/network.png" width="800px"/>
+## 6. Intergration to other diffusion framework 
+<!-- <a id="other_diffusion_framework" /> -->
 
-:star: If StableSR is helpful to your images or projects, please help star this repo. Thanks! :hugs:
+The integration of SSL function to other diffusion framework can be divided into **two** parts. The first part is related to the initialization of SSL function while the second one computes the SSL function during each training iteration.
 
-### Update
-- **2024.06.28**: Accepted by [IJCV](https://link.springer.com/journal/11263). See the latest [Full paper](https://github.com/IceClear/StableSR/releases/download/UncompressedPDF/StableSR_IJCV_Uncompressed.pdf).
-- **2024.02.29**: Support StableSR with [SD-Turbo](https://huggingface.co/stabilityai/sd-turbo). Thank [Andray](https://github.com/light-and-ray) for the finding!
+- **Initialization**
+The initialization aims to pre-process the mask datas and pre-compile the cuda-version SSL function. It will only be called once at the beginning. You can directly use the same code as those used in this StableSR framework. The source code is the "init_issl_settings" in the L46-L66 of `ldm/models/diffusion/ddpmssl.py`:
 
-  Now the [ComfyUI](https://github.com/gameltb/comfyui-stablesr) [![GitHub Stars](https://img.shields.io/github/stars/gameltb/comfyui-stablesr?style=social)](https://github.com/gameltb/comfyui-stablesr) of StableSR is also available. Thank [gameltb](https://github.com/gameltb) and [WSJUSA](https://github.com/WSJUSA) for the implementation!
-- **2023.11.30**: Code Update.
-  - Support DDIM and negative prompts
-  - Add CFW training scripts
-  - Add FaceSR training and test scripts
-- **2023.10.08**: Our test sets associated with the results in our [paper](https://arxiv.org/abs/2305.07015) are now available at [[HuggingFace](https://huggingface.co/datasets/Iceclear/StableSR-TestSets)] and [[OpenXLab](https://openxlab.org.cn/datasets/Iceclear/StableSR_Testsets)]. You may have an easy comparison with StableSR now.
-- **2023.08.19**: Integrated to :hugs: [Hugging Face](https://huggingface.co/spaces). Try out online demo! [![Hugging Face](https://img.shields.io/badge/Demo-%F0%9F%A4%97%20Hugging%20Face-blue)](https://huggingface.co/spaces/Iceclear/StableSR).
-- **2023.08.19**: Integrated to :panda_face: [OpenXLab](https://openxlab.org.cn/apps). Try out online demo! [![OpenXLab](https://img.shields.io/badge/Demo-%F0%9F%90%BC%20OpenXLab-blue)](https://openxlab.org.cn/apps/detail/Iceclear/StableSR).
-- **2023.07.31**: Integrated to :rocket: [Replicate](https://replicate.com/explore). Try out online demo! [![Replicate](https://img.shields.io/badge/Demo-%F0%9F%9A%80%20Replicate-blue)](https://replicate.com/cjwbw/stablesr) Thank [Chenxi](https://github.com/chenxwh) for the implementation!
-- **2023.07.16**: You may reproduce the LDM baseline used in our paper using [LDM-SRtuning](https://github.com/IceClear/LDM-SRtuning) [![GitHub Stars](https://img.shields.io/github/stars/IceClear/LDM-SRtuning?style=social)](https://github.com/IceClear/LDM-SRtuning).
-- **2023.07.14**: :whale: [**ModelScope**](https://modelscope.cn/models/xhlin129/cv_stablesr_image-super-resolution/summary) for StableSR is released!
-- **2023.06.30**: :whale: [**New model**](https://huggingface.co/Iceclear/StableSR/blob/main/stablesr_768v_000139.ckpt) trained on [SD-2.1-768v](https://huggingface.co/stabilityai/stable-diffusion-2-1) is released! Better performance with fewer artifacts!
-- **2023.06.28**: Support training on SD-2.1-768v.
-- **2023.05.22**: :whale: Improve the code to save more GPU memory, now 128 --> 512 needs 8.9G. Enable start from intermediate steps.
-- **2023.05.20**: :whale: The [**WebUI**](https://github.com/pkuliyi2015/sd-webui-stablesr) [![GitHub Stars](https://img.shields.io/github/stars/pkuliyi2015/sd-webui-stablesr?style=social)](https://github.com/pkuliyi2015/sd-webui-stablesr) of StableSR is available. Thank [Li Yi](https://github.com/pkuliyi2015) for the implementation!
-- **2023.05.13**: Add Colab demo of StableSR. <a href="https://colab.research.google.com/drive/11SE2_oDvbYtcuHDbaLAxsKk_o3flsO1T?usp=sharing"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="google colab logo"></a>
-- **2023.05.11**: Repo is released.
+```python
+    def init_issl_settings(self):
+        if self.sslopt.get('mask_stride', 0) > 1:
+            mask_size = int(self.configs.model.params['image_size'])
+            mask_stride = torch.eye(self.sslopt.get('mask_stride', 0), self.sslopt.get('mask_stride', 0),
+                                    dtype=torch.float32)
+            mask_stride = mask_stride.repeat(math.ceil(mask_size / self.sslopt.get('mask_stride', 0)),
+                                             math.ceil(mask_size / self.sslopt.get('mask_stride', 0)))
+            mask_stride = mask_stride[:mask_size, :mask_size]
+            mask_stride = mask_stride.unsqueeze(0).unsqueeze(0)
+            self.mask_stride = nn.Parameter(data=mask_stride, requires_grad=False).cuda()
+            print(f"mask stride is {self.sslopt.get('mask_stride', 0)}")
 
-### TODO
-- [x] ~~Code release~~
-- [x] ~~Update link to paper and project page~~
-- [x] ~~Pretrained models~~
-- [x] ~~Colab demo~~
-- [x] ~~StableSR-768v released~~
-- [x] ~~Replicate demo~~
-- [x] ~~HuggingFace demo~~
-- [x] ~~StableSR-face released~~
-- [x] ~~ComfyUI support~~
+        if self.configs.ISSL_loss.get('selfsim_opt'):
+            self.cri_selfsim = build_loss(self.configs.ISSL_loss['selfsim_opt']).to(self.device)
+        else:
+            self.cri_selfsim = None
 
-### Demo on real-world SR
-
-[<img src="assets/imgsli_1.jpg" height="223px"/>](https://imgsli.com/MTc2MTI2) [<img src="assets/imgsli_2.jpg" height="223px"/>](https://imgsli.com/MTc2MTE2) [<img src="assets/imgsli_3.jpg" height="223px"/>](https://imgsli.com/MTc2MTIw)
-[<img src="assets/imgsli_8.jpg" height="223px"/>](https://imgsli.com/MTc2MjUy) [<img src="assets/imgsli_4.jpg" height="223px"/>](https://imgsli.com/MTc2MTMy) [<img src="assets/imgsli_5.jpg" height="223px"/>](https://imgsli.com/MTc2MTMz)
-[<img src="assets/imgsli_9.jpg" height="214px"/>](https://imgsli.com/MTc2MjQ5) [<img src="assets/imgsli_6.jpg" height="214px"/>](https://imgsli.com/MTc2MTM0) [<img src="assets/imgsli_7.jpg" height="214px"/>](https://imgsli.com/MTc2MTM2) [<img src="assets/imgsli_10.jpg" height="214px"/>](https://imgsli.com/MTc2MjU0)
-
-For more evaluation, please refer to our [paper](https://arxiv.org/abs/2305.07015) for details.
-
-### Demo on 4K Results
-
-- StableSR is capable of achieving arbitrary upscaling in theory, below is an 4x example with a result beyond 4K (4096x6144).
-
-[<img src="assets/main-fig.png" width="800px"/>](https://imgsli.com/MjIzMjQx)
-
-```
-# DDIM w/ negative prompts
-python scripts/sr_val_ddim_text_T_negativeprompt_canvas_tile.py --config configs/stableSRNew/v2-finetune_text_T_768v.yaml --ckpt stablesr_768v_000139.ckpt --vqgan_ckpt vqgan_finetune_00011.ckpt --init-img ./inputs/test_example/ --outdir ../output/ --ddim_steps 20 --dec_w 0.0 --colorfix_type wavelet --scale 7.0 --use_negative_prompt --upscale 4 --seed 42 --n_samples 1 --input_size 768 --tile_overlap 48 --ddim_eta 1.0
-```
-
-- **More examples**.
-  - [4K Demo1](https://imgsli.com/MTc4MDg3), which is a 4x SR on the image from [here](https://github.com/pkuliyi2015/multidiffusion-upscaler-for-automatic1111).
-  - [4K Demo2](https://imgsli.com/MTc4NDk2), which is a 8x SR on the image from [here](https://github.com/Mikubill/sd-webui-controlnet/blob/main/tests/images/ski.jpg).
-  - More comparisons can be found [here](https://github.com/IceClear/StableSR/issues/2) and [here](https://github.com/pkuliyi2015/sd-webui-stablesr).
-
-### Dependencies and Installation
-- Pytorch == 1.12.1
-- CUDA == 11.7
-- pytorch-lightning==1.4.2
-- xformers == 0.0.16 (Optional)
-- Other required packages in `environment.yaml`
-```
-# git clone this repository
-git clone https://github.com/IceClear/StableSR.git
-cd StableSR
-
-# Create a conda environment and activate it
-conda env create --file environment.yaml
-conda activate stablesr
-
-# Install xformers
-conda install xformers -c xformers/label/dev
-
-# Install taming & clip
-pip install -e git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
-pip install -e git+https://github.com/openai/CLIP.git@main#egg=clip
-pip install -e .
+        if self.configs.ISSL_loss.get('selfsim1_opt'):
+            self.cri_selfsim1 = build_loss(self.configs.ISSL_loss['selfsim1_opt']).to(self.device)
+        else:
+            self.cri_selfsim1 = None
 ```
 
-### Running Examples
+- **Compute SSL during training**
+In each training iteration, please follow the code of function "issl" in L423-L496 of `ldm/models/diffusion/ddpmssl.py`:
 
-#### Train
-Download the pretrained Stable Diffusion models from [[HuggingFace](https://huggingface.co/stabilityai/stable-diffusion-2-1-base)]
+```python
+    def issl(self, sr, gt, mask, sslopt):
+        if self.cri_selfsim or self.cri_selfsim1:
+            b, _, _, _ = gt.shape
+            b_gt_list = []
+            b_sr_list = []
+            for i in range(b):
+                b_mask_gt = mask[i, :].unsqueeze(0)
+                if sslopt.get('mask_stride', 0) > 1:
+                    b_mask_gt = self.mask_stride * b_mask_gt
+                if b_mask_gt.sum() == 0:
+                    pass
+                else:
+                    b_gt = gt[i, :].unsqueeze(0)  # 1,3,256, 256
+                    b_sr = sr[i, :].unsqueeze(0)  # 1,3,256,256
+                    output_self_matrix = similarity_map(img=b_sr.clone(), mask=b_mask_gt.clone(),
+                                                        simself_strategy=sslopt['simself_strategy'],
+                                                        dh=sslopt.get('simself_dh', 16),
+                                                        dw=sslopt.get('simself_dw', 16),
+                                                        kernel_size=sslopt['kernel_size'],
+                                                        scaling_factor=sslopt['scaling_factor'],
+                                                        softmax=sslopt.get('softmax_sr', False),
+                                                        temperature=sslopt.get('temperature', 0),
+                                                        crossentropy=sslopt.get('crossentropy', False),
+                                                        rearrange_back=sslopt.get('rearrange_back', True),
+                                                        stride=1, pix_num=1, index=None,
+                                                        kernel_size_center=sslopt.get('kernel_size_center', 9),
+                                                        mean=sslopt.get('mean', False),
+                                                        var=sslopt.get('var', False),
+                                                        gene_type=sslopt.get('gene_type', "sum"),
+                                                        largest_k=sslopt.get('largest_k', 0))
+                    output_self_matrix = output_self_matrix.getitem()
 
-- Train Time-aware encoder with SFT: set the ckpt_path in config files ([Line 22](https://github.com/IceClear/StableSR/blob/main/configs/stableSRNew/v2-finetune_text_T_512.yaml#L22) and [Line 55](https://github.com/IceClear/StableSR/blob/main/configs/stableSRNew/v2-finetune_text_T_512.yaml#L55))
-```
-python main.py --train --base configs/stableSRNew/v2-finetune_text_T_512.yaml --gpus GPU_ID, --name NAME --scale_lr False
-```
+                    gt_self_matrix = similarity_map(img=b_gt.clone(), mask=b_mask_gt.clone(),
+                                                    simself_strategy=sslopt['simself_strategy'],
+                                                    dh=sslopt.get('simself_dh', 16),
+                                                    dw=sslopt.get('simself_dw', 16),
+                                                    kernel_size=sslopt['kernel_size'],
+                                                    scaling_factor=sslopt['scaling_factor'],
+                                                    softmax=sslopt.get('softmax_gt', False),
+                                                    temperature=sslopt.get('temperature', 0),
+                                                    crossentropy=sslopt.get('crossentropy', False),
+                                                    rearrange_back=sslopt.get('rearrange_back', True),
+                                                    stride=1, pix_num=1, index=None,
+                                                    kernel_size_center=sslopt.get('kernel_size_center', 9),
+                                                    mean=sslopt.get('mean', False),
+                                                    var=sslopt.get('var', False),
+                                                    gene_type=sslopt.get('gene_type', "sum"),
+                                                    largest_k=sslopt.get('largest_k', 0))
+                    gt_self_matrix = gt_self_matrix.getitem()
 
-- Train CFW: set the ckpt_path in config files ([Line 6](https://github.com/IceClear/StableSR/blob/main/configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml#L6)).
+                    b_sr_list.append(output_self_matrix)
+                    b_gt_list.append(gt_self_matrix)
+                    del output_self_matrix
+                    del gt_self_matrix
+            b_sr_list = torch.cat(b_sr_list, dim=1)
+            b_gt_list = torch.cat(b_gt_list, dim=1)
 
-You need to first generate training data using the finetuned diffusion model in the first stage.
-```
-# General SR
-python scripts/generate_vqgan_data.py --config configs/stableSRdata/test_data.yaml --ckpt CKPT_PATH --outdir OUTDIR --skip_grid --ddpm_steps 200 --base_i 0 --seed 10000
-```
-```
-# For face data
-python scripts/generate_vqgan_data_face.py --config configs/stableSRdata/test_data_face.yaml --ckpt CKPT_PATH --outdir OUTDIR --skip_grid --ddpm_steps 200 --base_i 0 --seed 10000
-```
-The data folder should be like this:
-```
-CFW_trainingdata/
-    └── inputs
-          └── 00000001.png # LQ images, (512, 512, 3) (resize to 512x512)
-          └── ...
-    └── gts
-          └── 00000001.png # GT images, (512, 512, 3) (512x512)
-          └── ...
-    └── latents
-          └── 00000001.npy # Latent codes (N, 4, 64, 64) of HR images generated by the diffusion U-net, saved in .npy format.
-          └── ...
-    └── samples
-          └── 00000001.png # The HR images generated from latent codes, just to make sure the generated latents are correct.
-          └── ...
-```
+        if self.cri_selfsim:
+            l_selfsim = self.cri_selfsim(b_sr_list, b_gt_list)
+        else:
+            l_selfsim = None
 
-Then you can train CFW:
+        if self.cri_selfsim1:
+            l_selfsim_kl = self.cri_selfsim1(b_sr_list, b_gt_list)
+        else:
+            l_selfsim_kl = None
+
+        if self.cri_selfsim or self.cri_selfsim1:
+            del b_sr_list
+            del b_gt_list
+
+        return l_selfsim, l_selfsim_kl
 ```
-python main.py --train --base configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml --gpus GPU_ID, --name NAME --scale_lr False
-```
-
-#### Resume
-
-```
-python main.py --train --base configs/stableSRNew/v2-finetune_text_T_512.yaml --gpus GPU_ID, --resume RESUME_PATH --scale_lr False
-```
-
-#### Test directly
-
-Download the Diffusion and autoencoder pretrained models from [[HuggingFace](https://huggingface.co/Iceclear/StableSR/blob/main/README.md) | [OpenXLab](https://openxlab.org.cn/models/detail/Iceclear/StableSR)].
-We use the same color correction scheme introduced in paper by default.
-You may change ```--colorfix_type wavelet``` for better color correction.
-You may also disable color correction by ```--colorfix_type nofix```
-
-- **StableSR-Turbo**: Get the ckpt first from [[HuggingFace](https://huggingface.co/Iceclear/StableSR/resolve/main/stablesr_turbo.ckpt) or [OpenXLab](https://openxlab.org.cn/models/detail/Iceclear/StableSR/tree/main)]. Then you just need to modify ```--ckpt_path``` and set ```--ddpm_steps``` to 4. See examples below:
-
-```
-python scripts/sr_val_ddpm_text_T_vqganfin_old.py --config configs/stableSRNew/v2-finetune_text_T_512.yaml --ckpt ./stablesr_turbo.ckpt --init-img LQ_PATH --outdir OUT_PATH --ddpm_steps 4 --dec_w 0.5 --seed 42 --n_samples 1 --vqgan_ckpt ./vqgan_cfw_00011.ckpt --colorfix_type wavelet
-```
-
-```
-python scripts/sr_val_ddpm_text_T_vqganfin_oldcanvas_tile.py --config configs/stableSRNew/v2-finetune_text_T_512.yaml --ckpt ./stablesr_turbo.ckpt --init-img LQ_PATH --outdir OUT_PATH --ddpm_steps 4 --dec_w 0.5 --seed 42 --n_samples 1 --vqgan_ckpt ./vqgan_cfw_00011.ckpt --colorfix_type wavelet --upscale 4
-```
-
-- **DDIM is supported now. See [here](https://github.com/IceClear/StableSR/tree/main/scripts)**
-
-- Test on 128 --> 512: You need at least 10G GPU memory to run this script (batchsize 2 by default)
-```
-python scripts/sr_val_ddpm_text_T_vqganfin_old.py --config configs/stableSRNew/v2-finetune_text_T_512.yaml --ckpt CKPT_PATH --vqgan_ckpt VQGANCKPT_PATH --init-img INPUT_PATH --outdir OUT_DIR --ddpm_steps 200 --dec_w 0.5 --colorfix_type adain
-```
-- Test on arbitrary size w/o chop for autoencoder (for results beyond 512): The memory cost depends on your image size, but is usually above 10G.
-```
-python scripts/sr_val_ddpm_text_T_vqganfin_oldcanvas.py --config configs/stableSRNew/v2-finetune_text_T_512.yaml --ckpt CKPT_PATH --vqgan_ckpt VQGANCKPT_PATH --init-img INPUT_PATH --outdir OUT_DIR --ddpm_steps 200 --dec_w 0.5 --colorfix_type adain
-```
-
-- Test on arbitrary size w/ chop for autoencoder: Current default setting needs at least 18G to run, you may reduce the autoencoder tile size by setting ```--vqgantile_size``` and ```--vqgantile_stride```.
-Note the min tile size is 512 and the stride should be smaller than the tile size. A smaller size may introduce more border artifacts.
-```
-python scripts/sr_val_ddpm_text_T_vqganfin_oldcanvas_tile.py --config configs/stableSRNew/v2-finetune_text_T_512.yaml --ckpt CKPT_PATH --vqgan_ckpt VQGANCKPT_PATH --init-img INPUT_PATH --outdir OUT_DIR --ddpm_steps 200 --dec_w 0.5 --colorfix_type adain
-```
-
-- For test on 768 model, you need to set ```--config configs/stableSRNew/v2-finetune_text_T_768v.yaml```, ```--input_size 768``` and ```--ckpt```. You can also adjust ```--tile_overlap```, ```--vqgantile_size``` and ```--vqgantile_stride``` accordingly. We did not finetune CFW.
-
-#### Test FaceSR
-You need to first generate reference images using [[CodeFormer](https://github.com/sczhou/CodeFormer)] or other blind face models.   
-Pretrained Models: [[HuggingFace](https://huggingface.co/Iceclear/StableSR/blob/main/README.md) | [OpenXLab](https://openxlab.org.cn/models/detail/Iceclear/StableSR)].
-```
-python scripts/sr_val_ddpm_text_T_vqganfin_facerefersampling.py --init-img LR_PATH --ref-img REF_PATH --outdir OUTDIR --config ./configs/stableSRNew/v2-finetune_face_T_512.yaml --ckpt face_stablesr_000050.ckpt
- --vqgan_ckpt face_vqgan_cfw_00011.ckpt --ddpm_steps 200 --dec_w 0.0 --facesr
-```
-
-#### Test using Replicate API
-```
-import replicate
-model = replicate.models.get(<model_name>)
-model.predict(input_image=...)
-```
-You may see [here](https://replicate.com/cjwbw/stablesr/api) for more information.
-
-### Citation
-If our work is useful for your research, please consider citing:
-
-    @article{wang2024exploiting,
-      author = {Wang, Jianyi and Yue, Zongsheng and Zhou, Shangchen and Chan, Kelvin C.K. and Loy, Chen Change},
-      title = {Exploiting Diffusion Prior for Real-World Image Super-Resolution},
-      article = {International Journal of Computer Vision},
-      year = {2024}
-    }
-
-### License
-
-This project is licensed under <a rel="license" href="https://github.com/IceClear/StableSR/blob/main/LICENSE.txt">NTU S-Lab License 1.0</a>. Redistribution and use should follow this license.
-
-### Acknowledgement
-
-This project is based on [stablediffusion](https://github.com/Stability-AI/stablediffusion), [latent-diffusion](https://github.com/CompVis/latent-diffusion), [SPADE](https://github.com/NVlabs/SPADE), [mixture-of-diffusers](https://github.com/albarji/mixture-of-diffusers) and [BasicSR](https://github.com/XPixelGroup/BasicSR). Thanks for their awesome work.
-
-### Contact
-If you have any questions, please feel free to reach me out at `iceclearwjy@gmail.com`.

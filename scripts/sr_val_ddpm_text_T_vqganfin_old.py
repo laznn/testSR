@@ -79,6 +79,7 @@ def chunk(it, size):
 	it = iter(it)
 	return iter(lambda: tuple(islice(it, size)), ())
 
+
 def load_model_from_config(config, ckpt, verbose=False):
 	print(f"Loading model from {ckpt}")
 	pl_sd = torch.load(ckpt, map_location="cpu")
@@ -94,7 +95,7 @@ def load_model_from_config(config, ckpt, verbose=False):
 		print("unexpected keys:")
 		print(u)
 
-	model.cuda()
+	# model.cuda()
 	model.eval()
 	return model
 
@@ -118,15 +119,36 @@ def main():
 		type=str,
 		nargs="?",
 		help="path to the input image",
-		default="inputs/user_upload",
+		default="/data0/chendu/dataset/BlindLR/MyStableSRCFW/HGGT/inputs",
 	)
 	parser.add_argument(
-		"--outdir",
+		"--outdir_samples",
 		type=str,
 		nargs="?",
 		help="dir to write results to",
-		default="outputs/user_upload",
+		default="/data0/chendu/dataset/BlindLR/MyStableSRCFW/HGGT/samples",
 	)
+
+	parser.add_argument(
+		"--save_samples",
+		type=bool,
+		default=True,
+	)
+
+	parser.add_argument(
+		"--outdir_latents",
+		type=str,
+		nargs="?",
+		help="dir to write results to",
+		default="/data0/chendu/dataset/BlindLR/MyStableSRCFW/HGGT/latents",
+	)
+
+	parser.add_argument(
+		"--save_latents",
+		type=bool,
+		default=True,
+	)
+
 	parser.add_argument(
 		"--ddpm_steps",
 		type=int,
@@ -148,25 +170,25 @@ def main():
 	parser.add_argument(
 		"--n_samples",
 		type=int,
-		default=2,
+		default=1,
 		help="how many samples to produce for each given prompt. A.k.a batch size",
 	)
 	parser.add_argument(
 		"--config",
 		type=str,
-		default="configs/stableSRNew/v2-finetune_text_T_512.yaml",
+		default="/data0/chendu/myprojects/MyStableSR/configs/mystableSRNew/v2-finetune_text_T_512.yaml",
 		help="path to config which constructs model",
 	)
 	parser.add_argument(
 		"--ckpt",
 		type=str,
-		default="models/ldm/stable-diffusion-v1/model.ckpt",
+		default="/data0/chendu/myprojects/MyStableSR/pretrained_models/MyTrain/epoch=000042.ckpt",
 		help="path to checkpoint of model",
 	)
 	parser.add_argument(
 		"--vqgan_ckpt",
 		type=str,
-		default="models/ldm/stable-diffusion-v1/epoch=000011.ckpt",
+		default="/data0/chendu/myprojects/MyStableSR/pretrained_models/StableSR/vqgan_cfw_00011_vae_only.ckpt",
 		help="path to checkpoint of VQGAN model",
 	)
 	parser.add_argument(
@@ -202,7 +224,7 @@ def main():
 	)
 
 	opt = parser.parse_args()
-	device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
 
 	print('>>>>>>>>>>color correction>>>>>>>>>>>')
 	if opt.colorfix_type == 'adain':
@@ -213,9 +235,9 @@ def main():
 		print('No color correction')
 	print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
 
-	vqgan_config = OmegaConf.load("configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml")
+	vqgan_config = OmegaConf.load("/data0/chendu/myprojects/MyStableSR/configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml")
 	vq_model = load_model_from_config(vqgan_config, opt.vqgan_ckpt)
-	vq_model = vq_model.to(device)
+	vq_model = vq_model.cuda()
 	vq_model.decoder.fusion_w = opt.dec_w
 
 	seed_everything(opt.seed)
@@ -227,27 +249,30 @@ def main():
 
 	config = OmegaConf.load(f"{opt.config}")
 	model = load_model_from_config(config, f"{opt.ckpt}")
-	model = model.to(device)
+	model = model.cuda()
 
-	os.makedirs(opt.outdir, exist_ok=True)
-	outpath = opt.outdir
+	os.makedirs(opt.outdir_samples, exist_ok=True)
+	outpath_samples = opt.outdir_samples
 
-	batch_size = opt.n_samples
+	os.makedirs(opt.outdir_latents, exist_ok=True)
+	outpath_latents = opt.outdir_latents
 
-	img_list_ori = os.listdir(opt.init_img)
-	img_list = copy.deepcopy(img_list_ori)
-	init_image_list = []
-	for item in img_list_ori:
-		if os.path.exists(os.path.join(outpath, item)):
-			img_list.remove(item)
-			continue
-		cur_image = load_img(os.path.join(opt.init_img, item)).to(device)
-		cur_image = transform(cur_image)
-		cur_image = cur_image.clamp(-1, 1)
-		init_image_list.append(cur_image)
-	init_image_list = torch.cat(init_image_list, dim=0)
-	niters = math.ceil(init_image_list.size(0) / batch_size)
-	init_image_list = init_image_list.chunk(niters)
+	# img_list_ori = os.listdir(opt.init_img)
+	# img_list = copy.deepcopy(img_list_ori)
+	# init_image_list = []
+	# for item in img_list_ori:
+	# 	if os.path.exists(os.path.join(outpath, item)):
+	# 		img_list.remove(item)
+	# 		continue
+	# 	cur_image = load_img(os.path.join(opt.init_img, item)).to(device)
+	# 	cur_image = transform(cur_image)
+	# 	cur_image = cur_image.clamp(-1, 1)
+	# 	init_image_list.append(cur_image)
+	# init_image_list = torch.cat(init_image_list, dim=0)
+	# niters = math.ceil(init_image_list.size(0) / batch_size)
+	# init_image_list = init_image_list.chunk(niters)
+
+
 
 	model.register_schedule(given_betas=None, beta_schedule="linear", timesteps=1000,
 						  linear_start=0.00085, linear_end=0.0120, cosine_s=8e-3)
@@ -270,44 +295,28 @@ def main():
 	model.num_timesteps = 1000
 	model.ori_timesteps = list(use_timesteps)
 	model.ori_timesteps.sort()
-	model = model.to(device)
-
-	param_list = []
-	untrain_paramlist = []
-	name_list = []
-	for k, v in model.named_parameters():
-		if 'spade' in k or 'structcond_stage_model' in k:
-			param_list.append(v)
-		else:
-			name_list.append(k)
-			untrain_paramlist.append(v)
-	trainable_params = sum(p.numel() for p in param_list)
-	untrainable_params = sum(p.numel() for p in untrain_paramlist)
-	print(name_list)
-	print(trainable_params)
-	print(untrainable_params)
-
-	param_list = []
-	untrain_paramlist = []
-	for k, v in vq_model.named_parameters():
-		if 'fusion_layer' in k:
-			param_list.append(v)
-		elif 'loss' not in k:
-			untrain_paramlist.append(v)
-	trainable_params += sum(p.numel() for p in param_list)
-	# untrainable_params += sum(p.numel() for p in untrain_paramlist)
-	print(trainable_params)
-	print(untrainable_params)
+	model = model.cuda()
 
 	precision_scope = autocast if opt.precision == "autocast" else nullcontext
-	niqe_list = []
-	with torch.no_grad():
-		with precision_scope("cuda"):
-			with model.ema_scope():
-				tic = time.time()
-				count = 0
-				for n in trange(niters, desc="Sampling"):
-					init_image = init_image_list[n]
+
+	img_list_ori = os.listdir(opt.init_img)
+	img_list = copy.deepcopy(img_list_ori)
+
+	for item in img_list_ori:
+		if os.path.exists(os.path.join(outpath_samples, item)):
+			img_list.remove(item)
+			continue
+		cur_image = load_img(os.path.join(opt.init_img, item)).cuda()
+		cur_image = transform(cur_image)
+		cur_image = cur_image.clamp(-1, 1)
+		init_image_list = cur_image
+
+		basename = os.path.splitext(item)[0]
+
+		with torch.no_grad():
+			with precision_scope("cuda"):
+				with model.ema_scope():
+					init_image = init_image_list
 					init_latent_generator, enc_fea_lq = vq_model.encode(init_image)
 					init_latent = model.get_first_stage_encoding(init_latent_generator)
 					text_init = ['']*init_image.size(0)
@@ -316,35 +325,32 @@ def main():
 					noise = torch.randn_like(init_latent)
 					# If you would like to start from the intermediate steps, you can add noise to LR to the specific steps.
 					t = repeat(torch.tensor([999]), '1 -> b', b=init_image.size(0))
-					t = t.to(device).long()
+					t = t.cuda().long()
 					x_T = model.q_sample_respace(x_start=init_latent, t=t, sqrt_alphas_cumprod=sqrt_alphas_cumprod, sqrt_one_minus_alphas_cumprod=sqrt_one_minus_alphas_cumprod, noise=noise)
 					x_T = None
 
 					samples, _ = model.sample(cond=semantic_c, struct_cond=init_latent, batch_size=init_image.size(0), timesteps=opt.ddpm_steps, time_replace=opt.ddpm_steps, x_T=x_T, return_intermediates=True)
-					x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
-					if opt.colorfix_type == 'adain':
-						x_samples = adaptive_instance_normalization(x_samples, init_image)
-					elif opt.colorfix_type == 'wavelet':
-						x_samples = wavelet_reconstruction(x_samples, init_image)
-					x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
-					# count += 1
-					# if count==5:
-					# 	tic = time.time()
-					# if count >= 15:
-					# 	print('>>>>>>>>>>>>>>>>>>>>>>>>')
-					# 	print(time.time()-tic)
-					# 	print(s)
+					print(f"samples shape is {samples.shape}")
 
-					for i in range(init_image.size(0)):
-						img_name = img_list.pop(0)
-						basename = os.path.splitext(os.path.basename(img_name))[0]
-						x_sample = 255. * rearrange(x_samples[i].cpu().numpy(), 'c h w -> h w c')
+					if opt.save_latents:
+						latents = samples.cpu().numpy()
+						np.save(os.path.join(outpath_latents, f"{basename}.npy"), latents)
+
+
+					if opt.save_samples:
+						x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
+						if opt.colorfix_type == 'adain':
+							x_samples = adaptive_instance_normalization(x_samples, init_image)
+						elif opt.colorfix_type == 'wavelet':
+							x_samples = wavelet_reconstruction(x_samples, init_image)
+						x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
+						x_sample = 255. * rearrange(x_samples[0].cpu().numpy(), 'c h w -> h w c')
 						Image.fromarray(x_sample.astype(np.uint8)).save(
-							os.path.join(outpath, basename+'.png'))
+							os.path.join(outpath_samples, basename+'.png'))
 
-				toc = time.time()
 
-	print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
+
+	print(f"Your samples are ready and waiting for you here: \n{outpath_samples} \n"
 		  f" \nEnjoy.")
 
 
